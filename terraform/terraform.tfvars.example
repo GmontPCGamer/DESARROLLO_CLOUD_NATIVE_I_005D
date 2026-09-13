@@ -1,0 +1,13 @@
+aws_region     = "us-east-1"
+nombre_proyecto = "cloud-native-005d"
+
+# URL del backend Spring Boot (ALB o ECS service discovery).
+url_backend = "https://REEMPLAZAR-URL-BACKEND"
+
+# CORS: dominios donde está publicado el frontend Angular.
+cors_origenes = ["https://REEMPLAZAR-DOMINIO-FRONTEND"]
+
+# Authorizer JWT de Azure AD (Entra ID). Con el issuer validado por JWKS no
+# se necesitan secrets; sólo issuer + audiencia (clientId).
+issuer_uri = "https://login.microsoftonline.com/REEMPLAZAR-TENANT/v2.0"
+audiencia  = "REEMPLAZAR-CLIENT-ID"
