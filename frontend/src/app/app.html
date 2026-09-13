@@ -1,0 +1,19 @@
+<header class="toolbar">
+  <span class="brand">Cloud Native Lab</span>
+  <nav>
+    <a routerLink="/">Inicio</a>
+    <a routerLink="/perfil">Perfil</a>
+  </nav>
+  <div class="session">
+    @if (isAuthenticated() && account(); as user) {
+      <span class="account" title="{{ user.username }}">{{ user.username }}</span>
+      <button type="button" class="btn btn-secondary" (click)="logout()">Cerrar sesión</button>
+    } @else {
+      <button type="button" class="btn btn-primary" (click)="login()">Iniciar sesión</button>
+    }
+  </div>
+</header>
+
+<main class="content">
+  <router-outlet />
+</main>

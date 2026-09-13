@@ -1,0 +1,15 @@
+<h2>Perfil (protegido)</h2>
+<p>Esta vista solo es accesible con una sesión válida mediante <code>MsalGuard</code>.</p>
+
+@if (account(); as user) {
+  <dl>
+    <dt>Nombre</dt>
+    <dd>{{ user.name }}</dd>
+    <dt>Correo / Usuario</dt>
+    <dd>{{ user.username }}</dd>
+    <dt>ID (sub)</dt>
+    <dd>{{ user.localAccountId }}</dd>
+    <dt>ID de cuenta</dt>
+    <dd>{{ user.homeAccountId }}</dd>
+  </dl>
+}
