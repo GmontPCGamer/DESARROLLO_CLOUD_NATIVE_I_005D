@@ -1,5 +1,6 @@
 package com.cloudnative.backend.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,9 +20,13 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final CorsProperties corsProperties;
+  private final boolean requireApiScope;
 
-  public SecurityConfig(CorsProperties corsProperties) {
+  public SecurityConfig(
+      CorsProperties corsProperties,
+      @Value("${app.security.require-scope:false}") boolean requireApiScope) {
     this.corsProperties = corsProperties;
+    this.requireApiScope = requireApiScope;
   }
 
   @Bean
@@ -30,10 +35,14 @@ public class SecurityConfig {
         .csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-            .requestMatchers("/api/public/**").permitAll()
-            .anyRequest().authenticated())
+        .authorizeHttpRequests(auth -> {
+          auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+          auth.requestMatchers("/api/public/**").permitAll();
+          if (requireApiScope) {
+            auth.requestMatchers("/api/**").hasAuthority("SCOPE_access_as_user");
+          }
+          auth.anyRequest().authenticated();
+        })
         .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
     return http.build();

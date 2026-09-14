@@ -1,0 +1,48 @@
+<p class="kicker">Checkout</p>
+<h1>Carrito</h1>
+<p class="muted">Los ítems viven en el microservicio de carrito. Al pagar, el de compras arma el pedido y dispara un aviso.</p>
+
+@if (error()) {
+  <p class="alert">{{ error() }}</p>
+}
+
+@if (cart(); as current) {
+  @if (current.items.length === 0) {
+    <div class="empty panel">
+      <p>Tu carrito está vacío.</p>
+      <a class="btn btn-primary" routerLink="/catalogo">Ir a comprar</a>
+    </div>
+  } @else {
+    <div class="grid">
+      @for (line of current.items; track line.product.id) {
+        <article class="panel card">
+          <img [src]="line.product.imageUrl" [alt]="line.product.name" />
+          <h3>{{ line.product.name }}</h3>
+          <p class="price">{{ formatClp(line.subtotal) }}</p>
+          <p class="muted">{{ formatClp(line.product.price) }} c/u</p>
+          <div class="actions">
+            <button type="button" class="btn btn-ghost" (click)="changeQty(line.product.id, line.quantity - 1)">-</button>
+            <span>{{ line.quantity }}</span>
+            <button type="button" class="btn btn-ghost" (click)="changeQty(line.product.id, line.quantity + 1)">+</button>
+            <button type="button" class="btn btn-ghost" (click)="remove(line.product.id)">Quitar</button>
+          </div>
+        </article>
+      }
+    </div>
+    <div class="panel checkout-panel" style="margin-top: 1.25rem">
+      <label class="checkout-field">Comuna de despacho
+        <input [value]="commune()" (input)="commune.set($any($event.target).value)" />
+      </label>
+      @if (shippingQuote(); as shipping) {
+        <p class="muted">Despacho {{ formatClp(shipping.price) }} · {{ shipping.promise }}</p>
+      }
+      @if (paymentStatus()) {
+        <p class="success">Pago autorizado. Confirmando tu pedido...</p>
+      }
+      <p>Total: <strong class="price">{{ formatClp(current.total) }}</strong></p>
+      <button type="button" class="btn btn-primary" [disabled]="loading()" (click)="checkout()">
+        Confirmar compra
+      </button>
+    </div>
+  }
+}

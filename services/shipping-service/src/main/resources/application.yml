@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: shipping-service
+  profiles:
+    default: local
+server:
+  port: 8087

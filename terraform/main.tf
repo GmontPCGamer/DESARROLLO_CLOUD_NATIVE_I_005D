@@ -41,13 +41,6 @@ resource "aws_apigatewayv2_integration" "backend" {
 }
 
 # ---- Rutas ------------------------------------------------------------
-# Ruta protegida: cualquier verbo sobre {proxy+} exige token JWT válido.
-resource "aws_apigatewayv2_route" "proxy" {
-  api_id    = aws_apigatewayv2_api.api.id
-  route_key = "$default"
-  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
-}
-
 resource "aws_apigatewayv2_route" "protegida" {
   api_id        = aws_apigatewayv2_api.api.id
   route_key     = "ANY /{proxy+}"
@@ -55,10 +48,28 @@ resource "aws_apigatewayv2_route" "protegida" {
   authorizer_id = aws_apigatewayv2_authorizer.jwt.id
 }
 
-# Ruta pública (health check) sin authorizer.
+# Rutas públicas explícitas sin authorizer.
 resource "aws_apigatewayv2_route" "health" {
   api_id    = aws_apigatewayv2_api.api.id
-  route_key = "GET /health"
+  route_key = "GET /api/public/health"
+  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
+}
+
+resource "aws_apigatewayv2_route" "products" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "GET /api/public/products"
+  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
+}
+
+resource "aws_apigatewayv2_route" "product" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "GET /api/public/products/{id}"
+  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
+}
+
+resource "aws_apigatewayv2_route" "preflight" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "OPTIONS /{proxy+}"
   target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
 }
 
@@ -72,9 +83,11 @@ resource "aws_apigatewayv2_deployment" "api" {
   }
 
   depends_on = [
-    aws_apigatewayv2_route.proxy,
     aws_apigatewayv2_route.protegida,
     aws_apigatewayv2_route.health,
+    aws_apigatewayv2_route.products,
+    aws_apigatewayv2_route.product,
+    aws_apigatewayv2_route.preflight,
     aws_apigatewayv2_authorizer.jwt,
   ]
 }

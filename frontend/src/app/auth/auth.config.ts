@@ -16,8 +16,19 @@ export function MSALInstanceFactory(): IPublicClientApplication {
   } satisfies Configuration);
 }
 
+const apiScopes = [environment.msal.apiScope];
+
 export const protectedResourceMap = new Map<string, Array<string>>([
-  [environment.backendApiUrl, ['api://REEMPLAZAR_SCOPE/access_as_user']],
+  [`${environment.backendApiUrl}/cart`, apiScopes],
+  [`${environment.backendApiUrl}/cart/`, apiScopes],
+  [`${environment.backendApiUrl}/orders`, apiScopes],
+  [`${environment.backendApiUrl}/orders/`, apiScopes],
+  [`${environment.backendApiUrl}/notifications`, apiScopes],
+  [`${environment.backendApiUrl}/notifications/`, apiScopes],
+  [`${environment.backendApiUrl}/me`, apiScopes],
+  [`${environment.backendApiUrl}/products/`, apiScopes],
+  [`${environment.backendApiUrl}/payments/`, apiScopes],
+  [`${environment.backendApiUrl}/shipping/`, apiScopes],
 ]);
 
 export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
@@ -31,7 +42,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
   return {
     interactionType: InteractionType.Redirect,
     authRequest: {
-      scopes: ['openid', 'profile', 'offline_access'],
+      scopes: ['openid', 'profile', 'offline_access', environment.msal.apiScope],
     },
     loginFailedRoute: '/acceso-denegado',
   };

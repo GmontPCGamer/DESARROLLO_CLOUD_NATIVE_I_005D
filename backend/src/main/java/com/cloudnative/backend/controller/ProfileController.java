@@ -21,6 +21,9 @@ public class ProfileController {
         "preferred_username", jwt.getClaimAsString("preferred_username"),
         "email", jwt.getClaimAsString("preferred_username"),
         "tenant", jwt.getClaimAsString("tid"),
+        "issuer", jwt.getIssuer(),
+        "audience", jwt.getAudience(),
+        "scope", jwt.getClaimAsString("scp"),
         "roles", List.copyOf(jwt.getClaimAsStringList("roles") != null
             ? jwt.getClaimAsStringList("roles")
             : List.of()));

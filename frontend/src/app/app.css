@@ -1,39 +1,85 @@
 :host {
-  display: block;
-  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  color: #1f2937;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  color: #eff4f8;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: #0b3d91;
-  color: #fff;
+  gap: 2rem;
+  padding: 1rem clamp(1rem, 4vw, 3.5rem);
+  background: rgba(9, 17, 24, 0.94);
+  border-bottom: 1px solid rgba(239, 180, 76, 0.22);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(12px);
 }
 
 .brand {
-  font-weight: 600;
-  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: #efb44c;
+  color: #152026;
+  font-family: Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.brand-accent {
+  color: #efb44c;
 }
 
 .toolbar nav {
   display: flex;
-  gap: 1rem;
+  gap: 0.2rem;
   flex: 1;
+  flex-wrap: wrap;
 }
 
 .toolbar nav a {
-  color: #fff;
+  color: #b8c5ce;
   text-decoration: none;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.25rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.55rem;
+  font-size: 0.92rem;
 }
 
 .toolbar nav a:hover,
 .toolbar nav a.active {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(239, 180, 76, 0.12);
+  border-bottom: 2px solid #efb44c;
+  color: #fff;
+}
+
+.badge {
+  display: inline-flex;
+  min-width: 1.15rem;
+  margin-left: 0.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #efb44c;
+  color: #152026;
+  font-size: 0.72rem;
+  font-weight: 700;
+  justify-content: center;
 }
 
 .session {
@@ -45,7 +91,7 @@
 .account {
   font-size: 0.85rem;
   opacity: 0.9;
-  max-width: 18rem;
+  max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -53,23 +99,73 @@
 
 .btn {
   border: 0;
-  border-radius: 0.25rem;
-  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
   font-size: 0.9rem;
   cursor: pointer;
 }
 
 .btn-primary {
-  background: #fff;
-  color: #0b3d91;
+  background: #5ef0d0;
+  color: #06251f;
+  font-weight: 600;
 }
 
 .btn-secondary {
   background: transparent;
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .content {
-  padding: 1.5rem;
+  flex: 1;
+  padding: 2.5rem clamp(1rem, 4vw, 3.5rem) 4rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem clamp(1rem, 4vw, 3.5rem);
+  color: #8d9ca6;
+  font-size: 0.82rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footer div {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.footer strong {
+  color: #f1f5f7;
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .toolbar nav {
+    order: 3;
+    flex-basis: 100%;
+    overflow-x: auto;
+  }
+
+  .session {
+    margin-left: auto;
+  }
+
+  .footer {
+    flex-direction: column;
+  }
 }

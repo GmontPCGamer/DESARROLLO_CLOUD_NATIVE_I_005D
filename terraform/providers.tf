@@ -12,6 +12,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -23,4 +31,8 @@ provider "aws" {
   default_tags {
     tags = var.tags
   }
+}
+
+provider "azuread" {
+  tenant_id = var.azure_tenant_id
 }

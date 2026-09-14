@@ -10,3 +10,12 @@ server:
 app:
   cors:
     allowed-origins: http://localhost:4200
+  services:
+    catalog: ${CATALOG_URL:http://localhost:8081}
+    cart: ${CART_URL:http://localhost:8082}
+    orders: ${ORDERS_URL:http://localhost:8083}
+    notifications: ${NOTIFICATIONS_URL:http://localhost:8084}
+    inventory: ${INVENTORY_URL:http://localhost:8085}
+    payments: ${PAYMENTS_URL:http://localhost:8086}
+    shipping: ${SHIPPING_URL:http://localhost:8087}
+    reviews: ${REVIEWS_URL:http://localhost:8088}

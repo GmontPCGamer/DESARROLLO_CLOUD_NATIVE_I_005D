@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: order-service
+  profiles:
+    default: local
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  datasource:
+    url: jdbc:h2:mem:orders;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+server:
+  port: 8083
+
+app:
+  services:
+    catalog: ${CATALOG_URL:http://localhost:8081}
+    cart: ${CART_URL:http://localhost:8082}
+    notifications: ${NOTIFICATIONS_URL:http://localhost:8084}

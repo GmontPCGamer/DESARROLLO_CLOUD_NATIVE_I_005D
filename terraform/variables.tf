@@ -43,3 +43,58 @@ variable "audiencia" {
   type        = string
   default     = "REEMPLAZAR-CLIENT-ID"
 }
+
+variable "gestionar_entra" {
+  description = "Crea los registros de aplicación de Microsoft Entra ID mediante Terraform."
+  type        = bool
+  default     = false
+}
+
+variable "azure_tenant_id" {
+  description = "Directory (tenant) ID de Microsoft Entra."
+  type        = string
+  sensitive   = true
+  default     = "REEMPLAZAR-TENANT-ID"
+}
+
+variable "entra_api_nombre" {
+  description = "Nombre del registro de aplicación que representa la API Spring Boot."
+  type        = string
+  default     = "NexoTech API"
+}
+
+variable "entra_api_identifier_uri" {
+  description = "URI única que identifica la API dentro del tenant de Entra."
+  type        = string
+  default     = "api://nexotech-api"
+}
+
+variable "entra_spa_nombre" {
+  description = "Nombre del registro de aplicación que representa Angular."
+  type        = string
+  default     = "NexoTech SPA"
+}
+
+variable "spa_redirect_uris" {
+  description = "URIs de redirección permitidas para Angular."
+  type        = list(string)
+  default     = ["http://localhost:4200/auth"]
+}
+
+variable "spa_logout_uris" {
+  description = "URIs de cierre de sesión permitidas para Angular."
+  type        = list(string)
+  default     = ["http://localhost:4200"]
+}
+
+variable "entra_student_app_nombre" {
+  description = "Nombre de la aplicación híbrida compatible con permisos de estudiante."
+  type        = string
+  default     = "NexoTech Student"
+}
+
+variable "entra_student_identifier_uri" {
+  description = "URI única de la API híbrida para la cuenta estudiante."
+  type        = string
+  default     = "api://nexotech-student-api"
+}

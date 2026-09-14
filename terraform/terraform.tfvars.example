@@ -11,3 +11,15 @@ cors_origenes = ["https://REEMPLAZAR-DOMINIO-FRONTEND"]
 # se necesitan secrets; sólo issuer + audiencia (clientId).
 issuer_uri = "https://login.microsoftonline.com/REEMPLAZAR-TENANT/v2.0"
 audiencia  = "REEMPLAZAR-CLIENT-ID"
+
+# Microsoft Entra ID. Usa Azure CLI (az login) y activa esta sección sólo
+# cuando quieras que Terraform cree los registros de aplicación.
+gestionar_entra  = true
+azure_tenant_id  = "REEMPLAZAR-TENANT-ID"
+entra_api_nombre = "NexoTech API"
+entra_api_identifier_uri = "api://nexotech-api"
+entra_spa_nombre = "NexoTech SPA"
+spa_redirect_uris = ["http://localhost:4200/auth"]
+spa_logout_uris   = ["http://localhost:4200"]
+entra_student_app_nombre = "NexoTech Student"
+entra_student_identifier_uri = "api://nexotech-student-api"

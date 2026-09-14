@@ -3,6 +3,8 @@
 > Proyecto de la asignatura **DESARROLLO_CLOUD_NATIVE_I_005D** (Cloud Native).
 > Plataforma de referencia: **SPA Angular + MSAL** → **API Gateway (AWS) con authorizer JWT de Azure AD / Entra ID** → **backend Spring Boot (OAuth2 Resource Server)**.
 
+Para una explicación completa de negocio, arquitectura, servicios, seguridad, ejecución y próximos pasos, revisar [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md).
+
 ---
 
 ## 1. Stack
@@ -12,6 +14,19 @@
 | **Frontend** | Angular 22 (standalone) + `@azure/msal-angular` / `@azure/msal-browser` | `frontend/` |
 | **Infraestructura** | Terraform (AWS API Gateway HTTP v2 + authorizer JWT) | `terraform/` |
 | **Backend** | Spring Boot 4 + Spring Security OAuth2 Resource Server | `backend/` |
+
+Microservicios de negocio:
+
+| Servicio | Puerto | Responsabilidad |
+|----------|--------|----------------|
+| `catalog-service` | 8081 | Productos, categorías y stock base |
+| `cart-service` | 8082 | Carritos por usuario |
+| `order-service` | 8083 | Checkout, compras y coordinación |
+| `notification-service` | 8084 | Avisos de compra y sistema |
+| `inventory-service` | 8085 | Disponibilidad y reservas de inventario |
+| `payment-service` | 8086 | Intenciones de pago simuladas |
+| `shipping-service` | 8087 | Cotización y seguimiento de despacho |
+| `review-service` | 8088 | Reseñas públicas y opiniones autenticadas |
 
 ---
 
@@ -24,7 +39,7 @@
 - Una **app registrada en Azure AD / Entra ID** con:
   - `clientId`, `tenantId` y, si se valida por issuer, el `issuer-uri`:
     `https://login.microsoftonline.com/{tenant-id}/v2.0`
-  - Permisos / scope para el backend (Resource Server)
+  - Scope delegado `api://nexotech-student-api/access_as_user` para las operaciones protegidas
 
 ---
 
@@ -87,6 +102,7 @@ export const environment = {
   msal: {
     clientId: 'TU_CLIENT_ID',
     authority: 'https://login.microsoftonline.com/TU_TENANT_ID',
+    apiScope: 'api://nexotech-student-api/access_as_user',
     redirectUri: 'http://localhost:4200/auth',
   },
   backendApiUrl: 'http://localhost:8080',
@@ -95,7 +111,11 @@ export const environment = {
 
 Rutas:
 - `/` → pública
+- `/catalogo` y `/catalogo/:id` → catálogo público de solo lectura
 - `/perfil` → **protegida** por `MsalGuard`
+- `/carrito`, `/compras` y `/notificaciones` → **protegidas** por `MsalGuard` y token Bearer
+- `/catalogo/:id` incluye reseñas públicas; publicar reseñas requiere sesión.
+- El checkout cotiza despacho y autoriza un pago simulado antes de confirmar la orden.
 - `/auth` → callback de redirección MSAL (`MsalRedirectComponent`)
 
 ### 3.3 Terraform (infraestructura AWS)
@@ -127,7 +147,9 @@ Angular --Authorization: Bearer <JWT>--> API Gateway (authorizer JWT valida firm
 ```
 
 - **API Gateway**: valida el JWT con el authorizer JWT (JWKS del issuer) y comprueba audiencia.
-- **Backend**: Spring Security `oauth2ResourceServer().jwt(...)` valida de forma independiente el token (defensa en profundidad).
+- **Backend y microservicios**: validan de forma independiente firma, issuer y audiencia del token.
+- **Rutas públicas**: solo `GET /api/public/health`, `GET /api/public/products`, `GET /api/public/products/{id}` y preflight CORS.
+- **Rutas protegidas**: cualquier otra ruta, incluyendo carrito, órdenes, notificaciones y `/api/me`.
 
 ---
 

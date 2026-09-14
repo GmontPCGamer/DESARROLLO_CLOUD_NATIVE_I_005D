@@ -1,0 +1,22 @@
+<p class="kicker">Avisos</p>
+<h1>Notificaciones</h1>
+<p class="muted">Cuando confirmas una compra, el microservicio de órdenes llama al de notificaciones.</p>
+
+@if (error()) {
+  <p class="alert">{{ error() }}</p>
+}
+
+@if (items().length === 0 && !error()) {
+  <div class="empty panel">No hay avisos todavía.</div>
+}
+
+@for (item of items(); track item.id) {
+    <article class="panel" style="margin-bottom: 0.8rem" [style.opacity]="item.read ? 0.65 : 1">
+    <h3>{{ item.title }}</h3>
+    <p>{{ item.message }}</p>
+    <p class="muted">{{ item.createdAt }} · {{ item.type }}</p>
+    @if (!item.read) {
+      <button type="button" class="btn btn-ghost" (click)="markRead(item)">Marcar leída</button>
+    }
+  </article>
+}
