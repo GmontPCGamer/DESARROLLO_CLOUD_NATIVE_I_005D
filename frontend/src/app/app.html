@@ -1,13 +1,30 @@
 <header class="toolbar">
-  <span class="brand">Cloud Native Lab</span>
+  <a class="brand" routerLink="/">
+    <span class="brand-mark">N</span>
+    <span>Nexo<span class="brand-accent">Tech</span></span>
+  </a>
   <nav>
-    <a routerLink="/">Inicio</a>
-    <a routerLink="/perfil">Perfil</a>
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
+    <a routerLink="/catalogo" routerLinkActive="active">Tienda</a>
+    <a routerLink="/carrito" routerLinkActive="active">
+      Carrito
+      @if (cartCount() > 0) {
+        <span class="badge">{{ cartCount() }}</span>
+      }
+    </a>
+    <a routerLink="/compras" routerLinkActive="active">Compras</a>
+    <a routerLink="/notificaciones" routerLinkActive="active">
+      Avisos
+      @if (unread() > 0) {
+        <span class="badge">{{ unread() }}</span>
+      }
+    </a>
+    <a routerLink="/perfil" routerLinkActive="active">Perfil</a>
   </nav>
   <div class="session">
     @if (isAuthenticated() && account(); as user) {
-      <span class="account" title="{{ user.username }}">{{ user.username }}</span>
-      <button type="button" class="btn btn-secondary" (click)="logout()">Cerrar sesión</button>
+      <span class="account" title="{{ user.username }}">{{ user.name || user.username }}</span>
+      <button type="button" class="btn btn-secondary" (click)="logout()">Salir</button>
     } @else {
       <button type="button" class="btn btn-primary" (click)="login()">Iniciar sesión</button>
     }
@@ -17,3 +34,11 @@
 <main class="content">
   <router-outlet />
 </main>
+
+<footer class="footer">
+  <div>
+    <strong>NexoTech</strong>
+    <span>Hardware para personas que hacen más.</span>
+  </div>
+  <p>Catálogo, carrito y compras protegidos con Microsoft Entra ID.</p>
+</footer>

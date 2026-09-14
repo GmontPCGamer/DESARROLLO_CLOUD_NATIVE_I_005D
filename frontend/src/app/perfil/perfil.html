@@ -1,8 +1,9 @@
-<h2>Perfil (protegido)</h2>
-<p>Esta vista solo es accesible con una sesión válida mediante <code>MsalGuard</code>.</p>
+<p class="kicker">Cuenta</p>
+<h2>Perfil protegido con MsalGuard</h2>
+<p class="muted">Esta vista solo carga con sesión Entra ID. Los claims salen del token MSAL.</p>
 
 @if (account(); as user) {
-  <dl>
+  <dl class="panel">
     <dt>Nombre</dt>
     <dd>{{ user.name }}</dd>
     <dt>Correo / Usuario</dt>

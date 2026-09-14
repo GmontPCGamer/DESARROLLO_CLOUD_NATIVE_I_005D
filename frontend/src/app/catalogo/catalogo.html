@@ -1,0 +1,45 @@
+<p class="kicker">Inventario</p>
+<h1>Catálogo Pedidos360</h1>
+<p class="muted">Encuentra tu próximo equipo por categoría, marca o nombre.</p>
+
+<label class="search-box">
+  <span>Buscar en NexoTech</span>
+  <input type="search" placeholder="Ej: notebook gamer, Samsung, consola..." [value]="query()" (input)="search($any($event.target).value)" />
+</label>
+
+<div class="chip-row">
+  @for (category of categories; track category.id) {
+    <button type="button" class="chip" [class.active]="selected() === category.id" (click)="filter(category.id)">
+      {{ category.label }}
+    </button>
+  }
+</div>
+
+@if (error()) {
+  <p class="alert">{{ error() }}</p>
+}
+@if (message()) {
+  <p class="panel">{{ message() }}</p>
+}
+
+@if (visibleProducts().length === 0 && !error()) {
+  <div class="empty panel">No encontramos productos con esa búsqueda.</div>
+}
+
+<div class="grid">
+  @for (item of visibleProducts(); track item.id) {
+    <article class="panel card">
+      <img [src]="item.imageUrl" [alt]="item.name" />
+      <p class="muted">{{ item.brand }}</p>
+      <h3>{{ item.name }}</h3>
+      <p class="price">{{ formatClp(item.price) }}</p>
+      <p class="muted">Stock: {{ item.stock }}</p>
+      <div class="actions">
+        <a class="btn btn-ghost" [routerLink]="['/catalogo', item.id]">Detalle</a>
+        <button type="button" class="btn btn-primary" [disabled]="item.stock < 1" (click)="add(item)">
+          {{ item.stock < 1 ? 'Agotado' : 'Agregar' }}
+        </button>
+      </div>
+    </article>
+  }
+</div>

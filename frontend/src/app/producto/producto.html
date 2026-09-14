@@ -1,0 +1,55 @@
+<a routerLink="/catalogo" class="muted">← Volver al catálogo</a>
+
+@if (error()) {
+  <p class="alert">{{ error() }}</p>
+}
+
+@if (product(); as item) {
+  <section class="hero" style="margin-top: 1rem">
+    <img class="panel" [src]="item.imageUrl" [alt]="item.name" style="width: 100%; max-height: 420px; object-fit: cover" />
+    <div class="panel">
+      <p class="kicker">{{ item.category }} · {{ item.brand }}</p>
+      <h1>{{ item.name }}</h1>
+      <p>{{ item.description }}</p>
+      <p class="price">{{ formatClp(item.price) }}</p>
+      <p class="muted">Unidades disponibles: {{ item.stock }}</p>
+      @if (message()) {
+        <p>{{ message() }}</p>
+      }
+      <div class="actions">
+        <button type="button" class="btn btn-primary" (click)="add()">Agregar al carrito</button>
+        <a class="btn btn-ghost" routerLink="/carrito">Ver carrito</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel reviews-panel">
+    <div class="section-heading">
+      <div>
+        <p class="kicker">Experiencias reales</p>
+        <h2>Lo que dicen de este producto</h2>
+      </div>
+      <span class="muted">{{ reviews().length }} reseñas</span>
+    </div>
+    <div class="review-list">
+      @for (review of reviews(); track review.createdAt) {
+        <article class="review-item">
+          <strong>{{ review.author }}</strong>
+          <span class="stars">{{ '★'.repeat(review.rating) }}</span>
+          <p>{{ review.comment }}</p>
+        </article>
+      }
+    </div>
+    <div class="review-form">
+      <label>Tu valoración
+        <select [value]="reviewRating()" (change)="reviewRating.set(+$any($event.target).value)">
+          <option [value]="5">5 estrellas</option>
+          <option [value]="4">4 estrellas</option>
+          <option [value]="3">3 estrellas</option>
+        </select>
+      </label>
+      <textarea [value]="reviewText()" (input)="reviewText.set($any($event.target).value)" placeholder="¿Cómo ha sido tu experiencia?"></textarea>
+      <button type="button" class="btn btn-primary" (click)="publishReview()">Publicar reseña</button>
+    </div>
+  </section>
+}

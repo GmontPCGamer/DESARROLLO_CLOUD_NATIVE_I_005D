@@ -1,0 +1,24 @@
+<p class="kicker">Pedidos</p>
+<h1>Mis compras</h1>
+<p class="muted">Cada compra es un agregado persistido por el microservicio de órdenes.</p>
+
+@if (error()) {
+  <p class="alert">{{ error() }}</p>
+}
+
+@if (orders().length === 0 && !error()) {
+  <div class="empty panel">Aún no hay compras. El carrito es el primer paso.</div>
+}
+
+@for (order of orders(); track order.id) {
+  <article class="panel" style="margin-bottom: 1rem">
+    <p class="kicker">Pedido #{{ order.id }} · {{ order.status }}</p>
+    <p class="muted">{{ order.createdAt }}</p>
+    <ul>
+      @for (line of order.lines; track line.productId) {
+        <li>{{ line.quantity }} × {{ line.productName }} — {{ formatClp(line.unitPrice) }}</li>
+      }
+    </ul>
+    <p class="price">Total {{ formatClp(order.total) }}</p>
+  </article>
+}

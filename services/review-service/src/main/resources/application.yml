@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: review-service
+  profiles:
+    default: local
+server:
+  port: 8088

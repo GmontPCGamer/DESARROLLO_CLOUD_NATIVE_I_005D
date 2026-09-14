@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@angular/core';
 import { MsalBroadcastService, MsalGuardConfiguration, MsalService, MSAL_GUARD_CONFIG, MSAL_INSTANCE } from '@azure/msal-angular';
 import { InteractionStatus, IPublicClientApplication, PopupRequest, RedirectRequest } from '@azure/msal-browser';
 import { BehaviorSubject, filter, Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -55,7 +56,7 @@ export class AuthService {
       return Promise.resolve(null);
     }
     return this.msalInstance
-      .acquireTokenSilent({ scopes: ['openid', 'profile', 'offline_access'], account })
+      .acquireTokenSilent({ scopes: ['openid', 'profile', 'offline_access', environment.msal.apiScope], account })
       .then((result) => result.accessToken)
       .catch(() => null);
   }
