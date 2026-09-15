@@ -6,5 +6,5 @@ spring:
           issuer-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0
 app:
   security:
-    audience: ${AZURE_API_AUDIENCE:097bfd84-a8e3-4232-9048-718f4d648efd}
+    audience: ${AZURE_API_AUDIENCE:097bfd84-a8e3-4232-9048-718f4d648efd},api://nexotech-student-api
     require-scope: true

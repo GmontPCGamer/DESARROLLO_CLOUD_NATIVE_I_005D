@@ -1,8 +1,8 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { AccountInfo } from '@azure/msal-browser';
 import { Subject, takeUntil } from 'rxjs';
 import { AuthService } from './auth/auth.service';
+import { SessionStore } from './core/session.store';
 import { StoreApi } from './core/store.api';
 
 @Component({
@@ -12,40 +12,37 @@ import { StoreApi } from './core/store.api';
   templateUrl: './app.html',
 })
 export class App implements OnInit, OnDestroy {
-  protected isAuthenticated = signal(false);
-  protected account = signal<AccountInfo | null>(null);
-  protected cartCount = signal(0);
-  protected unread = signal(0);
-
+  protected readonly session = inject(SessionStore);
+  private readonly authService = inject(AuthService);
+  private readonly storeApi = inject(StoreApi);
   private readonly destroy$ = new Subject<void>();
 
-  constructor(
-    private readonly authService: AuthService,
-    private readonly storeApi: StoreApi,
-  ) {}
-
   ngOnInit(): void {
+    // Procesa un posible callback de Entra y limpia interacciones a medias.
+    this.authService
+      .handleRedirect()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (result) => {
+          if (result?.account) {
+            this.authService.refreshAuthenticationState();
+            this.session.refresh();
+          }
+        },
+        error: (error) => console.warn('[MSAL] Error procesando el redirect', error),
+      });
+
+    // Cada vez que MSAL termina una interacción (login, callback /auth, token silencioso)
+    // se recalcula la sesión y se cargan claims y contadores.
     this.authService
       .trackAuthenticationStatus()
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.authService.refreshAuthenticationState();
-        const loggedIn = this.authService.activeAccount !== undefined;
-        this.isAuthenticated.set(loggedIn);
-        this.account.set(this.authService.activeAccount ?? null);
-        if (loggedIn) {
-          this.refreshBadges();
-        } else {
-          this.cartCount.set(0);
-          this.unread.set(0);
-        }
+        this.session.refresh();
       });
 
-    this.storeApi.cartChanged$.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      if (this.isAuthenticated()) {
-        this.refreshBadges();
-      }
-    });
+    this.storeApi.cartChanged$.pipe(takeUntil(this.destroy$)).subscribe(() => this.session.refreshBadges());
   }
 
   ngOnDestroy(): void {
@@ -58,17 +55,7 @@ export class App implements OnInit, OnDestroy {
   }
 
   protected logout(): void {
+    this.session.clear();
     this.authService.logout();
-  }
-
-  protected refreshBadges(): void {
-    this.storeApi.cart().subscribe({
-      next: (cart) => this.cartCount.set(cart.totalItems ?? 0),
-      error: () => this.cartCount.set(0),
-    });
-    this.storeApi.unreadCount().subscribe({
-      next: (result) => this.unread.set(result.count ?? 0),
-      error: () => this.unread.set(0),
-    });
   }
 }

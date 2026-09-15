@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.cloudnative.cart.domain.CartItem;
 
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
-  List<CartItem> findByUserId(String userId);
+  List<CartItem> findByUserIdOrderByIdAsc(String userId);
 
   Optional<CartItem> findByUserIdAndProductId(String userId, Long productId);
 

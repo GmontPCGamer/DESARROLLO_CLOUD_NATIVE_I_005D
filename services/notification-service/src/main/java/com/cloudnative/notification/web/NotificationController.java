@@ -61,6 +61,16 @@ public class NotificationController {
     return toResponse(notifications.save(notification));
   }
 
+  @PatchMapping("/notifications/read-all")
+  public Map<String, Long> markAllRead(@AuthenticationPrincipal Jwt jwt) {
+    List<Notification> pending = notifications.findByUserIdOrderByCreatedAtDesc(jwt.getSubject()).stream()
+        .filter(notification -> !notification.isRead())
+        .toList();
+    pending.forEach(notification -> notification.setRead(true));
+    notifications.saveAll(pending);
+    return Map.of("updated", (long) pending.size());
+  }
+
   @PatchMapping("/notifications/{id}/read")
   public NotificationResponse markRead(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
     Notification notification = notifications.findById(id)

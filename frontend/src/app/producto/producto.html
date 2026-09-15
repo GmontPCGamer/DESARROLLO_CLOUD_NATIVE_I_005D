@@ -1,25 +1,55 @@
 <a routerLink="/catalogo" class="muted">← Volver al catálogo</a>
 
 @if (error()) {
-  <p class="alert">{{ error() }}</p>
+  <p class="alert" role="alert" style="margin-top: 1rem">{{ error() }}</p>
+}
+
+@if (loading()) {
+  <section class="product-hero" aria-busy="true">
+    <div class="panel skeleton" style="min-height: 380px"></div>
+    <div class="panel skeleton" style="min-height: 380px"></div>
+  </section>
 }
 
 @if (product(); as item) {
-  <section class="hero" style="margin-top: 1rem">
-    <img class="panel" [src]="item.imageUrl" [alt]="item.name" style="width: 100%; max-height: 420px; object-fit: cover" />
+  <section class="product-hero">
+    <img class="panel" [src]="item.imageUrl" [alt]="item.name" />
     <div class="panel">
       <p class="kicker">{{ item.category }} · {{ item.brand }}</p>
-      <h1>{{ item.name }}</h1>
+      <h1 style="margin-top: 0">{{ item.name }}</h1>
       <p>{{ item.description }}</p>
-      <p class="price">{{ formatClp(item.price) }}</p>
-      <p class="muted">Unidades disponibles: {{ item.stock }}</p>
-      @if (message()) {
-        <p>{{ message() }}</p>
+      <p class="price" style="font-size: 1.6rem">{{ formatClp(item.price) }}</p>
+
+      @if (reviews().length > 0) {
+        <div class="rating-summary">
+          <strong>{{ averageRating() }}</strong>
+          <span class="stars">{{ starText(roundedAverage()) }}</span>
+          <span class="muted">({{ reviews().length }} reseñas)</span>
+        </div>
       }
-      <div class="actions">
-        <button type="button" class="btn btn-primary" (click)="add()">Agregar al carrito</button>
+
+      <p [class]="item.stock < 1 ? 'stock-out' : item.stock <= 5 ? 'stock-low' : 'stock-ok'">
+        {{ item.stock < 1 ? 'Sin stock por ahora' : item.stock <= 5 ? 'Últimas ' + item.stock + ' unidades' : item.stock + ' unidades disponibles' }}
+      </p>
+
+      @if (message()) {
+        <p class="alert success" role="status">{{ message() }}</p>
+      }
+
+      <div class="actions" style="align-items: center">
+        <div class="qty" aria-label="Cantidad">
+          <button type="button" (click)="changeQty(-1)" [disabled]="quantity() <= 1">−</button>
+          <span>{{ quantity() }}</span>
+          <button type="button" (click)="changeQty(1)" [disabled]="quantity() >= maxQty()">+</button>
+        </div>
+        <button type="button" class="btn btn-primary" [disabled]="item.stock < 1 || adding()" (click)="add()">
+          {{ item.stock < 1 ? 'Agotado' : adding() ? 'Agregando…' : 'Agregar al carrito' }}
+        </button>
         <a class="btn btn-ghost" routerLink="/carrito">Ver carrito</a>
       </div>
+      @if (!isAuthenticated()) {
+        <p class="muted" style="margin-bottom: 0">Para comprar iniciarás sesión con tu cuenta Microsoft.</p>
+      }
     </div>
   </section>
 
@@ -31,25 +61,58 @@
       </div>
       <span class="muted">{{ reviews().length }} reseñas</span>
     </div>
+
     <div class="review-list">
-      @for (review of reviews(); track review.createdAt) {
+      @if (reviews().length === 0) {
+        <p class="muted">Aún no hay reseñas. Sé la primera persona en opinar.</p>
+      }
+      @for (review of reviews(); track review.id) {
         <article class="review-item">
           <strong>{{ review.author }}</strong>
-          <span class="stars">{{ '★'.repeat(review.rating) }}</span>
+          <span class="stars" [attr.aria-label]="review.rating + ' de 5 estrellas'">{{ starText(review.rating) }}</span>
+          <span class="muted"> · {{ review.createdAt | date: 'd MMM y' }}</span>
           <p>{{ review.comment }}</p>
         </article>
       }
     </div>
+
     <div class="review-form">
-      <label>Tu valoración
-        <select [value]="reviewRating()" (change)="reviewRating.set(+$any($event.target).value)">
-          <option [value]="5">5 estrellas</option>
-          <option [value]="4">4 estrellas</option>
-          <option [value]="3">3 estrellas</option>
-        </select>
+      <h3 style="margin: 0.5rem 0 0">Publica tu reseña</h3>
+      @if (!isAuthenticated()) {
+        <p class="muted" style="margin: 0">Necesitas iniciar sesión para publicar. Solo se permite una reseña por producto.</p>
+      }
+      <label>
+        Tu valoración
+        <span class="stars-input" role="radiogroup" aria-label="Valoración">
+          @for (star of stars; track star) {
+            <button
+              type="button"
+              role="radio"
+              [attr.aria-checked]="reviewRating() === star"
+              [class.on]="star <= reviewRating()"
+              (click)="reviewRating.set(star)"
+              [attr.aria-label]="star + ' estrellas'"
+            >
+              ★
+            </button>
+          }
+        </span>
       </label>
-      <textarea [value]="reviewText()" (input)="reviewText.set($any($event.target).value)" placeholder="¿Cómo ha sido tu experiencia?"></textarea>
-      <button type="button" class="btn btn-primary" (click)="publishReview()">Publicar reseña</button>
+      <textarea
+        [value]="reviewText()"
+        (input)="reviewText.set($any($event.target).value)"
+        maxlength="500"
+        placeholder="¿Cómo ha sido tu experiencia con este producto?"
+      ></textarea>
+      <div class="actions" style="justify-content: space-between; align-items: center">
+        <span class="muted">{{ reviewText().length }}/500</span>
+        <button type="button" class="btn btn-primary" [disabled]="publishing()" (click)="publishReview()">
+          {{ publishing() ? 'Publicando…' : isAuthenticated() ? 'Publicar reseña' : 'Iniciar sesión para publicar' }}
+        </button>
+      </div>
+      @if (reviewError()) {
+        <p class="alert" role="alert">{{ reviewError() }}</p>
+      }
     </div>
   </section>
 }

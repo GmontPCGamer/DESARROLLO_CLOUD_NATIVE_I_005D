@@ -31,3 +31,6 @@ terraform/*.tfplan.*
 !*.tfvars.example
 *.tfplan
 *.tfplan.*
+
+# Procesos locales (scripts/start-all.sh)
+.run/

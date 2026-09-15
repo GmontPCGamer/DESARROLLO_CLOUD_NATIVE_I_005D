@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { signal } from '@angular/core';
+import { EMPTY, of } from 'rxjs';
 import { App } from './app';
 import { AuthService } from './auth/auth.service';
 import { StoreApi } from './core/store.api';
@@ -16,6 +17,9 @@ describe('App', () => {
         {
           provide: AuthService,
           useValue: {
+            isAuthenticated: signal(false),
+            account: signal(null),
+            handleRedirect: () => of(null),
             trackAuthenticationStatus: () => of({}),
             refreshAuthenticationState: () => undefined,
             activeAccount: undefined,
@@ -26,6 +30,8 @@ describe('App', () => {
         {
           provide: StoreApi,
           useValue: {
+            cartChanged$: EMPTY,
+            me: () => of(null),
             cart: () => of({ items: [], total: 0, totalItems: 0 }),
             unreadCount: () => of({ count: 0 }),
           },
@@ -42,6 +48,6 @@ describe('App', () => {
   it('should render the store brand', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Pedidos360');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('NexoTech');
   });
 });

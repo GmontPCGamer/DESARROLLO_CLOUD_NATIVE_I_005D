@@ -13,6 +13,10 @@ spring:
     username: sa
     password:
 
+  mvc:
+    problemdetails:
+      enabled: true
+
 server:
   port: 8083
 
@@ -21,3 +25,4 @@ app:
     catalog: ${CATALOG_URL:http://localhost:8081}
     cart: ${CART_URL:http://localhost:8082}
     notifications: ${NOTIFICATIONS_URL:http://localhost:8084}
+    inventory: ${INVENTORY_URL:http://localhost:8085}

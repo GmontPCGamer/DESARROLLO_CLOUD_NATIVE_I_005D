@@ -55,6 +55,21 @@ public class ProductController {
     return toResponse(products.save(product));
   }
 
+  /**
+   * Devuelve unidades al catálogo. Se usa como compensación cuando falla el
+   * checkout y como reposición desde el panel de administración.
+   */
+  @PostMapping("/products/{id}/restock")
+  public ProductResponse restock(@PathVariable Long id, @RequestBody ReserveRequest request) {
+    if (request.quantity() < 1) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La cantidad debe ser positiva");
+    }
+    Product product = products.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado"));
+    product.setStock(product.getStock() + request.quantity());
+    return toResponse(products.save(product));
+  }
+
   @GetMapping("/public/health")
   public Map<String, String> health() {
     return Map.of("status", "UP", "service", "catalog-service");

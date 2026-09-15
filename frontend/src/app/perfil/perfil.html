@@ -1,16 +1,157 @@
-<p class="kicker">Cuenta</p>
-<h2>Perfil protegido con MsalGuard</h2>
-<p class="muted">Esta vista solo carga con sesión Entra ID. Los claims salen del token MSAL.</p>
+<div class="page-head">
+  <p class="kicker">Cuenta</p>
+  <h1>Perfil</h1>
+  <p class="muted">Esta vista está protegida con <code>MsalGuard</code>. Los datos salen del ID token, del access token y de la validación que hace el BFF.</p>
+</div>
 
 @if (account(); as user) {
-  <dl class="panel">
-    <dt>Nombre</dt>
-    <dd>{{ user.name }}</dd>
-    <dt>Correo / Usuario</dt>
-    <dd>{{ user.username }}</dd>
-    <dt>ID (sub)</dt>
-    <dd>{{ user.localAccountId }}</dd>
-    <dt>ID de cuenta</dt>
-    <dd>{{ user.homeAccountId }}</dd>
-  </dl>
+  <div class="two-col">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">Cliente · MSAL</p>
+          <h2>ID token</h2>
+        </div>
+        <span class="pill ok">Sesión activa</span>
+      </div>
+      <dl class="claims">
+        <dt>Nombre</dt>
+        <dd>{{ user.name || '—' }}</dd>
+        <dt>Usuario</dt>
+        <dd>{{ user.username }}</dd>
+        <dt>oid</dt>
+        <dd>{{ claim('oid') }}</dd>
+        <dt>sub</dt>
+        <dd>{{ claim('sub') }}</dd>
+        <dt>Tenant (tid)</dt>
+        <dd>{{ user.tenantId }}</dd>
+        <dt>Autoridad</dt>
+        <dd>{{ user.environment }}</dd>
+        <dt>Roles (claim)</dt>
+        <dd>
+          @if (idTokenRoles().length) {
+            <span class="chips">
+              @for (role of idTokenRoles(); track role) {
+                <span class="pill">{{ role }}</span>
+              }
+            </span>
+          } @else {
+            <span class="muted">sin app roles asignados en Entra</span>
+          }
+        </dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">Cliente · MSAL</p>
+          <h2>Access token para la API</h2>
+        </div>
+        @if (token()) {
+          <span class="pill ok">Obtenido en silencio</span>
+        }
+      </div>
+      @if (token(); as info) {
+        <dl class="claims">
+          <dt>Scopes</dt>
+          <dd>
+            <span class="chips">
+              @for (scope of info.scopes; track scope) {
+                <span class="pill">{{ scope }}</span>
+              }
+            </span>
+          </dd>
+          <dt>Audiencia (aud)</dt>
+          <dd>{{ info.audience || '—' }}</dd>
+          <dt>Emisor (iss)</dt>
+          <dd>{{ info.issuer || '—' }}</dd>
+          <dt>Versión</dt>
+          <dd>{{ info.tokenVersion || '—' }}</dd>
+          <dt>Expira</dt>
+          <dd>{{ info.expiresOn | date: 'd MMM y, HH:mm:ss' }}</dd>
+          <dt>Token</dt>
+          <dd>{{ info.preview }}</dd>
+        </dl>
+        <p class="muted" style="margin-bottom: 0">El <code>MsalInterceptor</code> adjunta este token como <code>Authorization: Bearer</code> en las llamadas privadas al BFF.</p>
+      } @else {
+        <p class="muted">No se pudo obtener el access token en silencio. Vuelve a iniciar sesión.</p>
+      }
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top: 1.25rem">
+    <div class="section-heading">
+      <div>
+        <p class="kicker">Servidor · BFF Spring Boot</p>
+        <h2>GET /api/me</h2>
+      </div>
+      @if (me()) {
+        <span class="pill ok">Token validado</span>
+      } @else if (meError()) {
+        <span class="pill warn">Error</span>
+      }
+    </div>
+    <p class="muted">Lo que el backend ve después de verificar firma (JWKS), emisor, audiencia, vigencia y scope.</p>
+
+    @if (loadingMe()) {
+      <div class="skeleton" style="min-height: 120px" aria-busy="true"></div>
+    }
+    @if (meError()) {
+      <p class="alert" role="alert">{{ meError() }}</p>
+    }
+    @if (me(); as claims) {
+      <dl class="claims">
+        <dt>sub</dt>
+        <dd>{{ claims.sub }}</dd>
+        <dt>Nombre</dt>
+        <dd>{{ claims.name || '—' }}</dd>
+        <dt>Usuario</dt>
+        <dd>{{ claims.preferred_username || '—' }}</dd>
+        <dt>Tenant</dt>
+        <dd>{{ claims.tenant || '—' }}</dd>
+        <dt>Emisor</dt>
+        <dd>{{ claims.issuer || '—' }}</dd>
+        <dt>Audiencia</dt>
+        <dd>{{ claims.audience?.join(', ') || '—' }}</dd>
+        <dt>Scopes</dt>
+        <dd>
+          <span class="chips">
+            @for (scope of claims.scopes; track scope) {
+              <span class="pill">{{ scope }}</span>
+            }
+            @if (!claims.scopes.length) {
+              <span class="muted">—</span>
+            }
+          </span>
+        </dd>
+        <dt>Roles</dt>
+        <dd>
+          <span class="chips">
+            @for (role of claims.roles; track role) {
+              <span class="pill">{{ role }}</span>
+            }
+            @if (claims.isAdmin) {
+              <span class="pill ok">ADMIN (autorizado en el BFF)</span>
+            }
+            @if (!claims.roles.length && !claims.isAdmin) {
+              <span class="muted">cliente estándar</span>
+            }
+          </span>
+        </dd>
+        <dt>Authorities</dt>
+        <dd>
+          <span class="chips">
+            @for (authority of claims.authorities; track authority) {
+              <span class="pill neutral">{{ authority }}</span>
+            }
+          </span>
+        </dd>
+        <dt>Emitido</dt>
+        <dd>{{ claims.issuedAt | date: 'd MMM y, HH:mm:ss' }}</dd>
+        <dt>Expira</dt>
+        <dd>{{ claims.expiresAt | date: 'd MMM y, HH:mm:ss' }}</dd>
+      </dl>
+    }
+  </section>
 }

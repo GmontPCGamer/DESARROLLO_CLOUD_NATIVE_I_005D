@@ -1,22 +1,38 @@
-<p class="kicker">Avisos</p>
-<h1>Notificaciones</h1>
-<p class="muted">Cuando confirmas una compra, el microservicio de órdenes llama al de notificaciones.</p>
+<div class="section-heading">
+  <div class="page-head" style="margin-bottom: 0">
+    <p class="kicker">Avisos</p>
+    <h1>Notificaciones</h1>
+    <p class="muted">Cada compra confirmada genera un aviso desde el servicio de notificaciones.</p>
+  </div>
+  @if (unread() > 0) {
+    <button type="button" class="btn btn-ghost" (click)="markAll()">Marcar todas como leídas ({{ unread() }})</button>
+  }
+</div>
 
 @if (error()) {
-  <p class="alert">{{ error() }}</p>
+  <p class="alert" role="alert">{{ error() }}</p>
 }
 
-@if (items().length === 0 && !error()) {
-  <div class="empty panel">No hay avisos todavía.</div>
+@if (loading()) {
+  <div class="panel skeleton" style="min-height: 120px" aria-busy="true"></div>
+} @else if (items().length === 0 && !error()) {
+  <div class="empty panel">No hay avisos todavía. Cuando confirmes una compra aparecerá aquí.</div>
 }
 
 @for (item of items(); track item.id) {
-    <article class="panel" style="margin-bottom: 0.8rem" [style.opacity]="item.read ? 0.65 : 1">
-    <h3>{{ item.title }}</h3>
-    <p>{{ item.message }}</p>
-    <p class="muted">{{ item.createdAt }} · {{ item.type }}</p>
-    @if (!item.read) {
-      <button type="button" class="btn btn-ghost" (click)="markRead(item)">Marcar leída</button>
-    }
+  <article class="panel notice" [class.read]="item.read">
+    <div class="notice-icon" aria-hidden="true">{{ icon(item.type) }}</div>
+    <div>
+      <h3>{{ item.title }}</h3>
+      <p>{{ item.message }}</p>
+      <p class="muted">{{ item.createdAt | date: "d MMM y, HH:mm" }} · <span class="pill neutral">{{ item.type }}</span></p>
+    </div>
+    <div>
+      @if (!item.read) {
+        <button type="button" class="btn btn-ghost" (click)="markRead(item)">Marcar leída</button>
+      } @else {
+        <span class="muted">Leída</span>
+      }
+    </div>
   </article>
 }

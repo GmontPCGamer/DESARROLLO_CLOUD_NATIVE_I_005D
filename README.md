@@ -45,7 +45,17 @@ Microservicios de negocio:
 
 ## 3. Cómo levantar el proyecto
 
-### 3.1 Backend (Spring Boot)
+### 3.1 Backend (BFF + 8 microservicios Spring Boot)
+
+Forma rápida (macOS/Linux): compila y levanta los 9 servicios en segundo plano.
+
+```bash
+scripts/start-all.sh            # perfil local (JWT HS256 de desarrollo)
+scripts/start-all.sh azuread    # perfil azuread (login real con Microsoft Entra ID)
+scripts/stop-all.sh             # detiene todo · logs en .run/logs/
+```
+
+Forma manual (un servicio por terminal):
 
 ```bash
 cd backend
@@ -70,10 +80,11 @@ $env:SPRING_PROFILES_ACTIVE = "local"; ./mvnw.cmd spring-boot:run
 Para el perfil `azuread`, define (sin commitear):
 
 ```
-SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://login.microsoftonline.com/{tenant-id}/v2.0
-AZURE_TENANT_ID=...
-# (opcional si se usa secret local)
-SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_SECRET_KEY=<base64>
+AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
+AZURE_API_AUDIENCE=097bfd84-a8e3-4232-9048-718f4d648efd
+APP_ADMIN_USERS=tu.correo@duocuc.cl        # quién recibe ROLE_ADMIN (/api/admin/**)
+# (opcional, solo perfil local)
+JWT_LOCAL_SECRET=<base64>
 ```
 
 Prueba rápida:
@@ -114,8 +125,11 @@ Rutas:
 - `/catalogo` y `/catalogo/:id` → catálogo público de solo lectura
 - `/perfil` → **protegida** por `MsalGuard`
 - `/carrito`, `/compras` y `/notificaciones` → **protegidas** por `MsalGuard` y token Bearer
-- `/catalogo/:id` incluye reseñas públicas; publicar reseñas requiere sesión.
-- El checkout cotiza despacho y autoriza un pago simulado antes de confirmar la orden.
+- `/admin` → protegida por `MsalGuard` **y** por rol: el BFF responde 403 sin `ROLE_ADMIN`
+- `/acceso-denegado` → destino de `MsalGuard` si el login falla o se cancela
+- `/catalogo/:id` incluye reseñas públicas; publicar reseñas requiere sesión (una por usuario y producto).
+- El checkout cotiza despacho, autoriza un **pago simulado** (sin proveedor real) y reserva stock
+  en inventario y catálogo con compensación si algún ítem falla.
 - `/auth` → callback de redirección MSAL (`MsalRedirectComponent`)
 
 ### 3.3 Terraform (infraestructura AWS)

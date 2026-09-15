@@ -1,24 +1,71 @@
-<p class="kicker">Pedidos</p>
-<h1>Mis compras</h1>
-<p class="muted">Cada compra es un agregado persistido por el microservicio de órdenes.</p>
+<div class="page-head">
+  <p class="kicker">Pedidos</p>
+  <h1>Mis compras</h1>
+  <p class="muted">Historial de pedidos confirmados, con despacho y pago simulado asociados.</p>
+</div>
 
-@if (error()) {
-  <p class="alert">{{ error() }}</p>
+@if (highlighted()) {
+  <p class="alert success" role="status">
+    Tu pedido <strong>#{{ highlighted() }}</strong> quedó confirmado. Revisa el aviso en <a routerLink="/notificaciones">Avisos</a>.
+  </p>
 }
 
-@if (orders().length === 0 && !error()) {
-  <div class="empty panel">Aún no hay compras. El carrito es el primer paso.</div>
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+
+@if (loading()) {
+  <div class="panel skeleton" style="min-height: 180px" aria-busy="true"></div>
+} @else if (orders().length === 0 && !error()) {
+  <div class="empty panel">
+    <p>Aún no tienes compras.</p>
+    <a class="btn btn-primary" routerLink="/catalogo">Ir a la tienda</a>
+  </div>
 }
 
 @for (order of orders(); track order.id) {
-  <article class="panel" style="margin-bottom: 1rem">
-    <p class="kicker">Pedido #{{ order.id }} · {{ order.status }}</p>
-    <p class="muted">{{ order.createdAt }}</p>
-    <ul>
+  <article class="panel order-card" [style.border-color]="highlighted() === order.id ? '#efb44c' : null">
+    <div class="order-head">
+      <div>
+        <h3>Pedido #{{ order.id }}</h3>
+        <span class="muted">{{ order.createdAt | date: "d 'de' MMMM y, HH:mm" }}</span>
+      </div>
+      <span class="pill ok">{{ order.status }}</span>
+    </div>
+
+    <dl class="order-meta">
+      <div>
+        <dt>Despacho</dt>
+        <dd>
+          {{ order.shippingService || 'Por definir' }}
+          @if (order.shippingCommune) {
+            · {{ order.shippingCommune }}, {{ order.shippingRegion }}
+          }
+        </dd>
+      </div>
+      <div>
+        <dt>Pago (simulado)</dt>
+        <dd>{{ paymentLabel(order.paymentMethod) }} · Ref. {{ shortId(order.paymentId) }}</dd>
+      </div>
+      <div>
+        <dt>Ítems</dt>
+        <dd>{{ order.lines.length }} producto(s)</dd>
+      </div>
+    </dl>
+
+    <ul class="order-lines">
       @for (line of order.lines; track line.productId) {
-        <li>{{ line.quantity }} × {{ line.productName }} — {{ formatClp(line.unitPrice) }}</li>
+        <li>
+          <span>{{ line.quantity }} × <a [routerLink]="['/catalogo', line.productId]">{{ line.productName }}</a></span>
+          <span>{{ formatClp(line.unitPrice * line.quantity) }}</span>
+        </li>
       }
     </ul>
-    <p class="price">Total {{ formatClp(order.total) }}</p>
+
+    <div class="summary" style="margin-bottom: 0">
+      <div><span>Subtotal</span><span>{{ formatClp(order.subtotal) }}</span></div>
+      <div><span>Despacho</span><span>{{ order.shippingCost > 0 ? formatClp(order.shippingCost) : 'Gratis' }}</span></div>
+      <div class="total"><span>Total</span><span>{{ formatClp(order.total) }}</span></div>
+    </div>
   </article>
 }

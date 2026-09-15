@@ -1,48 +1,130 @@
-<p class="kicker">Checkout</p>
-<h1>Carrito</h1>
-<p class="muted">Los ítems viven en el microservicio de carrito. Al pagar, el de compras arma el pedido y dispara un aviso.</p>
+<div class="page-head">
+  <p class="kicker">Checkout</p>
+  <h1>Tu carrito</h1>
+  <p class="muted">Revisa tus productos, elige dónde despachar y confirma. El pago es simulado: no se cobra nada.</p>
+</div>
 
 @if (error()) {
-  <p class="alert">{{ error() }}</p>
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+
+@if (loading()) {
+  <div class="cart-layout" aria-busy="true">
+    <div class="panel skeleton" style="min-height: 260px"></div>
+    <div class="panel skeleton" style="min-height: 260px"></div>
+  </div>
 }
 
 @if (cart(); as current) {
   @if (current.items.length === 0) {
     <div class="empty panel">
       <p>Tu carrito está vacío.</p>
-      <a class="btn btn-primary" routerLink="/catalogo">Ir a comprar</a>
+      <a class="btn btn-primary" routerLink="/catalogo">Ir a la tienda</a>
     </div>
   } @else {
-    <div class="grid">
-      @for (line of current.items; track line.product.id) {
-        <article class="panel card">
-          <img [src]="line.product.imageUrl" [alt]="line.product.name" />
-          <h3>{{ line.product.name }}</h3>
-          <p class="price">{{ formatClp(line.subtotal) }}</p>
-          <p class="muted">{{ formatClp(line.product.price) }} c/u</p>
-          <div class="actions">
-            <button type="button" class="btn btn-ghost" (click)="changeQty(line.product.id, line.quantity - 1)">-</button>
-            <span>{{ line.quantity }}</span>
-            <button type="button" class="btn btn-ghost" (click)="changeQty(line.product.id, line.quantity + 1)">+</button>
-            <button type="button" class="btn btn-ghost" (click)="remove(line.product.id)">Quitar</button>
+    <div class="cart-layout">
+      <section class="panel">
+        @for (line of current.items; track line.product.id) {
+          <article class="cart-line" [style.opacity]="busyItem() === line.product.id ? 0.55 : 1">
+            <a [routerLink]="['/catalogo', line.product.id]">
+              <img [src]="line.product.imageUrl" [alt]="line.product.name" />
+            </a>
+            <div>
+              <h3>
+                <a [routerLink]="['/catalogo', line.product.id]" style="text-decoration: none">{{ line.product.name }}</a>
+              </h3>
+              <p class="muted" style="margin: 0">{{ line.product.brand }} · {{ formatClp(line.product.price) }} c/u</p>
+              @if (line.quantity > line.product.stock) {
+                <p class="stock-out" style="margin: 0.3rem 0 0">Solo quedan {{ line.product.stock }} unidades</p>
+              }
+            </div>
+            <div class="line-actions">
+              <strong class="price">{{ formatClp(line.subtotal) }}</strong>
+              <div class="qty" aria-label="Cantidad">
+                <button type="button" [disabled]="busyItem() !== null" (click)="changeQty(line.product.id, line.quantity - 1)">−</button>
+                <span>{{ line.quantity }}</span>
+                <button
+                  type="button"
+                  [disabled]="busyItem() !== null || line.quantity >= line.product.stock || line.quantity >= 10"
+                  (click)="changeQty(line.product.id, line.quantity + 1)"
+                >
+                  +
+                </button>
+              </div>
+              <button type="button" class="link-button" [disabled]="busyItem() !== null" (click)="remove(line.product.id)">Quitar</button>
+            </div>
+          </article>
+        }
+        <div class="actions" style="justify-content: space-between">
+          <a class="btn btn-ghost" routerLink="/catalogo">Seguir comprando</a>
+          <button type="button" class="link-button" (click)="clear()">Vaciar carrito</button>
+        </div>
+      </section>
+
+      <aside class="panel checkout-panel">
+        <h2 style="margin-top: 0">Despacho y pago</h2>
+
+        <div class="form-row">
+          <label class="field">
+            Región
+            <select [value]="region()" (change)="region.set($any($event.target).value); quote.set(null)">
+              @for (item of regions; track item) {
+                <option [value]="item">{{ item }}</option>
+              }
+            </select>
+          </label>
+          <label class="field">
+            Comuna
+            <input [value]="commune()" (input)="commune.set($any($event.target).value); quote.set(null)" placeholder="Ej: Ñuñoa" />
+          </label>
+        </div>
+
+        <div class="actions" style="padding-top: 0.6rem">
+          <button type="button" class="btn btn-ghost" [disabled]="quoting()" (click)="quoteShipping()">
+            {{ quoting() ? 'Cotizando…' : 'Cotizar despacho' }}
+          </button>
+        </div>
+
+        @if (quote(); as shipping) {
+          <p class="alert info" style="margin: 0.8rem 0 0">
+            <strong>{{ shipping.service }}</strong> a {{ shipping.commune }} · {{ shipping.free ? 'Gratis' : formatClp(shipping.price) }}<br />
+            <span class="muted">{{ shipping.promise }}</span>
+          </p>
+        } @else if (freeShippingGap() > 0) {
+          <p class="muted" style="margin: 0.8rem 0 0">Te faltan {{ formatClp(freeShippingGap()) }} para despacho gratis.</p>
+        } @else {
+          <p class="muted stock-ok" style="margin: 0.8rem 0 0">Tu compra califica para despacho gratis.</p>
+        }
+
+        <label class="field" style="margin-top: 1rem">
+          Método de pago <span class="pill neutral">simulado</span>
+          <select [value]="paymentMethod()" (change)="paymentMethod.set($any($event.target).value)">
+            @for (method of paymentMethods; track method.id) {
+              <option [value]="method.id">{{ method.label }}</option>
+            }
+          </select>
+        </label>
+
+        <div class="summary">
+          <div><span>Subtotal ({{ current.totalItems }} ítems)</span><span>{{ formatClp(current.total) }}</span></div>
+          <div>
+            <span>Despacho</span>
+            <span>{{ quote() ? (quote()!.free ? 'Gratis' : formatClp(shippingCost())) : 'por cotizar' }}</span>
           </div>
-        </article>
-      }
-    </div>
-    <div class="panel checkout-panel" style="margin-top: 1.25rem">
-      <label class="checkout-field">Comuna de despacho
-        <input [value]="commune()" (input)="commune.set($any($event.target).value)" />
-      </label>
-      @if (shippingQuote(); as shipping) {
-        <p class="muted">Despacho {{ formatClp(shipping.price) }} · {{ shipping.promise }}</p>
-      }
-      @if (paymentStatus()) {
-        <p class="success">Pago autorizado. Confirmando tu pedido...</p>
-      }
-      <p>Total: <strong class="price">{{ formatClp(current.total) }}</strong></p>
-      <button type="button" class="btn btn-primary" [disabled]="loading()" (click)="checkout()">
-        Confirmar compra
-      </button>
+          <div class="total"><span>Total</span><span>{{ formatClp(total()) }}</span></div>
+        </div>
+
+        @if (step()) {
+          <p class="alert info" role="status">{{ step() }}</p>
+        }
+
+        <button type="button" class="btn btn-primary" style="width: 100%" [disabled]="checkingOut() || busyItem() !== null" (click)="checkout()">
+          {{ checkingOut() ? 'Procesando…' : 'Confirmar compra' }}
+        </button>
+        <p class="muted" style="margin: 0.7rem 0 0; font-size: 0.8rem">
+          Al confirmar, el BFF cotiza el despacho, autoriza un pago simulado, reserva el stock y genera tu pedido y un aviso.
+        </p>
+      </aside>
     </div>
   }
 }

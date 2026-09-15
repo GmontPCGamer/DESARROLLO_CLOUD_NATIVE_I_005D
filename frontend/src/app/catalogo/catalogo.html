@@ -1,45 +1,72 @@
-<p class="kicker">Inventario</p>
-<h1>Catálogo Pedidos360</h1>
-<p class="muted">Encuentra tu próximo equipo por categoría, marca o nombre.</p>
+<div class="page-head">
+  <p class="kicker">Tienda</p>
+  <h1>Catálogo NexoTech</h1>
+  <p class="muted">Encuentra tu próximo equipo por categoría, marca o nombre.</p>
+</div>
 
 <label class="search-box">
   <span>Buscar en NexoTech</span>
-  <input type="search" placeholder="Ej: notebook gamer, Samsung, consola..." [value]="query()" (input)="search($any($event.target).value)" />
+  <input
+    type="search"
+    placeholder="Ej: notebook gamer, Samsung, consola..."
+    [value]="query()"
+    (input)="search($any($event.target).value)"
+  />
 </label>
 
-<div class="chip-row">
+<div class="chip-row" role="tablist" aria-label="Categorías">
   @for (category of categories; track category.id) {
-    <button type="button" class="chip" [class.active]="selected() === category.id" (click)="filter(category.id)">
+    <button
+      type="button"
+      class="chip"
+      role="tab"
+      [attr.aria-selected]="selected() === category.id"
+      [class.active]="selected() === category.id"
+      (click)="filter(category.id)"
+    >
       {{ category.label }}
     </button>
   }
 </div>
 
 @if (error()) {
-  <p class="alert">{{ error() }}</p>
+  <p class="alert" role="alert">{{ error() }}</p>
 }
 @if (message()) {
-  <p class="panel">{{ message() }}</p>
+  <p class="alert success" role="status">{{ message() }}</p>
 }
 
-@if (visibleProducts().length === 0 && !error()) {
+@if (loading()) {
+  <div class="grid" aria-busy="true">
+    @for (item of skeletons; track item) {
+      <div class="panel skeleton skeleton-card"></div>
+    }
+  </div>
+} @else if (visibleProducts().length === 0 && !error()) {
   <div class="empty panel">No encontramos productos con esa búsqueda.</div>
+} @else {
+  <div class="grid">
+    @for (item of visibleProducts(); track item.id) {
+      <article class="panel card">
+        <a [routerLink]="['/catalogo', item.id]">
+          <img [src]="item.imageUrl" [alt]="item.name" loading="lazy" />
+        </a>
+        <p class="muted">{{ item.brand }}</p>
+        <h3>{{ item.name }}</h3>
+        <p class="price">{{ formatClp(item.price) }}</p>
+        <p class="muted" [class]="'muted ' + stockClass(item.stock)">{{ stockLabel(item.stock) }}</p>
+        <div class="actions">
+          <a class="btn btn-ghost" [routerLink]="['/catalogo', item.id]">Detalle</a>
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="item.stock < 1 || adding() === item.id"
+            (click)="add(item)"
+          >
+            {{ item.stock < 1 ? 'Agotado' : adding() === item.id ? 'Agregando…' : 'Agregar' }}
+          </button>
+        </div>
+      </article>
+    }
+  </div>
 }
-
-<div class="grid">
-  @for (item of visibleProducts(); track item.id) {
-    <article class="panel card">
-      <img [src]="item.imageUrl" [alt]="item.name" />
-      <p class="muted">{{ item.brand }}</p>
-      <h3>{{ item.name }}</h3>
-      <p class="price">{{ formatClp(item.price) }}</p>
-      <p class="muted">Stock: {{ item.stock }}</p>
-      <div class="actions">
-        <a class="btn btn-ghost" [routerLink]="['/catalogo', item.id]">Detalle</a>
-        <button type="button" class="btn btn-primary" [disabled]="item.stock < 1" (click)="add(item)">
-          {{ item.stock < 1 ? 'Agotado' : 'Agregar' }}
-        </button>
-      </div>
-    </article>
-  }
-</div>

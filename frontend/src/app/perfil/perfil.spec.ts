@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
 import { Perfil } from './perfil';
-import { MsalService } from '@azure/msal-angular';
+import { AuthService } from '../auth/auth.service';
+import { StoreApi } from '../core/store.api';
 
 describe('Perfil', () => {
   let component: Perfil;
@@ -11,12 +13,17 @@ describe('Perfil', () => {
       imports: [Perfil],
       providers: [
         {
-          provide: MsalService,
+          provide: AuthService,
           useValue: {
-            instance: {
-              getActiveAccount: () => null,
-              getAllAccounts: () => [],
-            },
+            activeAccount: undefined,
+            getAccessTokenInfo: () => Promise.resolve(null),
+          },
+        },
+        {
+          provide: StoreApi,
+          useValue: {
+            me: () => throwError(() => new Error('sin sesión')),
+            products: () => of([]),
           },
         },
       ],

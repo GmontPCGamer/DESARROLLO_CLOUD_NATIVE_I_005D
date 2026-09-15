@@ -90,7 +90,7 @@ public class CartController {
   }
 
   private CartResponse toResponse(String userId) {
-    List<CartItemResponse> lines = items.findByUserId(userId).stream()
+    List<CartItemResponse> lines = items.findByUserIdOrderByIdAsc(userId).stream()
         .map(item -> new CartItemResponse(item.getProductId(), item.getQuantity()))
         .toList();
     int totalItems = lines.stream().mapToInt(CartItemResponse::quantity).sum();

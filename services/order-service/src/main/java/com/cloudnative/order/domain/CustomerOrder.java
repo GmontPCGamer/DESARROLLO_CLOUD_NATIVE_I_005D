@@ -29,8 +29,31 @@ public class CustomerOrder {
   @Column(nullable = false)
   private String status;
 
+  /** Suma de las líneas, sin despacho. */
+  @Column(nullable = false, precision = 12, scale = 0)
+  private BigDecimal subtotal = BigDecimal.ZERO;
+
+  @Column(name = "shipping_cost", nullable = false, precision = 12, scale = 0)
+  private BigDecimal shippingCost = BigDecimal.ZERO;
+
+  /** subtotal + shippingCost. */
   @Column(nullable = false, precision = 12, scale = 0)
   private BigDecimal total;
+
+  @Column(name = "shipping_service")
+  private String shippingService;
+
+  @Column(name = "shipping_region")
+  private String shippingRegion;
+
+  @Column(name = "shipping_commune")
+  private String shippingCommune;
+
+  @Column(name = "payment_id")
+  private String paymentId;
+
+  @Column(name = "payment_method")
+  private String paymentMethod;
 
   @Column(nullable = false)
   private Instant createdAt = Instant.now();
@@ -58,12 +81,68 @@ public class CustomerOrder {
     this.status = status;
   }
 
+  public BigDecimal getSubtotal() {
+    return subtotal;
+  }
+
+  public void setSubtotal(BigDecimal subtotal) {
+    this.subtotal = subtotal;
+  }
+
+  public BigDecimal getShippingCost() {
+    return shippingCost;
+  }
+
+  public void setShippingCost(BigDecimal shippingCost) {
+    this.shippingCost = shippingCost;
+  }
+
   public BigDecimal getTotal() {
     return total;
   }
 
   public void setTotal(BigDecimal total) {
     this.total = total;
+  }
+
+  public String getShippingService() {
+    return shippingService;
+  }
+
+  public void setShippingService(String shippingService) {
+    this.shippingService = shippingService;
+  }
+
+  public String getShippingRegion() {
+    return shippingRegion;
+  }
+
+  public void setShippingRegion(String shippingRegion) {
+    this.shippingRegion = shippingRegion;
+  }
+
+  public String getShippingCommune() {
+    return shippingCommune;
+  }
+
+  public void setShippingCommune(String shippingCommune) {
+    this.shippingCommune = shippingCommune;
+  }
+
+  public String getPaymentId() {
+    return paymentId;
+  }
+
+  public void setPaymentId(String paymentId) {
+    this.paymentId = paymentId;
+  }
+
+  public String getPaymentMethod() {
+    return paymentMethod;
+  }
+
+  public void setPaymentMethod(String paymentMethod) {
+    this.paymentMethod = paymentMethod;
   }
 
   public Instant getCreatedAt() {

@@ -3,27 +3,33 @@
     <span class="brand-mark">N</span>
     <span>Nexo<span class="brand-accent">Tech</span></span>
   </a>
-  <nav>
+  <nav aria-label="Principal">
     <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Inicio</a>
     <a routerLink="/catalogo" routerLinkActive="active">Tienda</a>
     <a routerLink="/carrito" routerLinkActive="active">
       Carrito
-      @if (cartCount() > 0) {
-        <span class="badge">{{ cartCount() }}</span>
+      @if (session.cartCount() > 0) {
+        <span class="badge">{{ session.cartCount() }}</span>
       }
     </a>
     <a routerLink="/compras" routerLinkActive="active">Compras</a>
     <a routerLink="/notificaciones" routerLinkActive="active">
       Avisos
-      @if (unread() > 0) {
-        <span class="badge">{{ unread() }}</span>
+      @if (session.unread() > 0) {
+        <span class="badge">{{ session.unread() }}</span>
       }
     </a>
     <a routerLink="/perfil" routerLinkActive="active">Perfil</a>
+    @if (session.isAdmin()) {
+      <a routerLink="/admin" routerLinkActive="active" class="nav-admin">Administración</a>
+    }
   </nav>
   <div class="session">
-    @if (isAuthenticated() && account(); as user) {
-      <span class="account" title="{{ user.username }}">{{ user.name || user.username }}</span>
+    @if (session.isAuthenticated()) {
+      <a routerLink="/perfil" class="account" [title]="session.account()?.username">
+        <span class="avatar">{{ session.displayName().charAt(0).toUpperCase() }}</span>
+        <span class="account-name">{{ session.displayName() }}</span>
+      </a>
       <button type="button" class="btn btn-secondary" (click)="logout()">Salir</button>
     } @else {
       <button type="button" class="btn btn-primary" (click)="login()">Iniciar sesión</button>
@@ -40,5 +46,5 @@
     <strong>NexoTech</strong>
     <span>Hardware para personas que hacen más.</span>
   </div>
-  <p>Catálogo, carrito y compras protegidos con Microsoft Entra ID.</p>
+  <p>Sesión con Microsoft Entra ID · BFF Spring Boot · 8 microservicios.</p>
 </footer>

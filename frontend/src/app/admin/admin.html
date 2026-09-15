@@ -1,0 +1,64 @@
+<div class="page-head">
+  <p class="kicker">Administración</p>
+  <h1>Inventario</h1>
+  <p class="muted">Ruta protegida por rol: el BFF exige <code>ROLE_ADMIN</code> además de un token válido con scope <code>access_as_user</code>.</p>
+</div>
+
+@if (forbidden()) {
+  <div class="panel">
+    <span class="pill warn">403 Forbidden</span>
+    <h2>Tu cuenta no tiene el rol de administración</h2>
+    <p class="muted">
+      El token fue validado correctamente, pero no incluye el rol <code>ADMIN</code> ni tu usuario está en
+      <code>APP_ADMIN_USERS</code>. Esta pantalla demuestra la autorización por rol del BFF.
+    </p>
+    <a class="btn btn-ghost" routerLink="/perfil">Ver mis claims</a>
+  </div>
+}
+
+@if (error()) {
+  <p class="alert" role="alert">{{ error() }}</p>
+}
+@if (message()) {
+  <p class="alert success" role="status">{{ message() }}</p>
+}
+
+@if (loading()) {
+  <div class="panel skeleton" style="min-height: 240px" aria-busy="true"></div>
+}
+
+@if (!loading() && !forbidden()) {
+  <div class="panel" style="overflow-x: auto">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Producto</th>
+          <th>Categoría</th>
+          <th>Precio</th>
+          <th>Catálogo</th>
+          <th>Reservable</th>
+          <th>Reponer</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.product.id) {
+          <tr>
+            <td><a [routerLink]="['/catalogo', row.product.id]">{{ row.product.name }}</a></td>
+            <td class="muted">{{ row.product.category }}</td>
+            <td>{{ formatClp(row.product.price) }}</td>
+            <td [class]="row.product.stock < 1 ? 'stock-out' : row.product.stock <= 5 ? 'stock-low' : 'stock-ok'">{{ row.product.stock }}</td>
+            <td [class]="row.reservable < 1 ? 'stock-out' : row.reservable <= 5 ? 'stock-low' : 'stock-ok'">{{ row.reservable }}</td>
+            <td>
+              <div class="actions" style="padding-top: 0; margin-top: 0; align-items: center">
+                <input type="number" min="1" max="999" [value]="qty(row.product.id)" (input)="setQty(row.product.id, $any($event.target).value)" />
+                <button type="button" class="btn btn-primary" [disabled]="busy() === row.product.id" (click)="restock(row)">
+                  {{ busy() === row.product.id ? '…' : '+ Stock' }}
+                </button>
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

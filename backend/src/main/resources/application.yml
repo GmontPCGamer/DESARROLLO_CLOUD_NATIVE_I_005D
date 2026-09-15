@@ -3,13 +3,20 @@ spring:
     name: backend
   profiles:
     default: local
+  mvc:
+    problemdetails:
+      enabled: true
 
 server:
   port: 8080
 
 app:
   cors:
-    allowed-origins: http://localhost:4200
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:4200}
+  security:
+    # Usuarios (preferred_username u oid del token) que reciben ROLE_ADMIN aunque
+    # el tenant no tenga app roles configurados. Separados por coma.
+    admin-users: ${APP_ADMIN_USERS:}
   services:
     catalog: ${CATALOG_URL:http://localhost:8081}
     cart: ${CART_URL:http://localhost:8082}

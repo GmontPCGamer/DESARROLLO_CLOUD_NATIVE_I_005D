@@ -4,11 +4,11 @@
     <h1>Tu próximo upgrade empieza aquí.</h1>
     <p>
       Celulares, notebooks, televisores, consolas y accesorios seleccionados para trabajar,
-      jugar y disfrutar mejor. Compra con la tranquilidad de tener cada paso bajo control.
+      jugar y disfrutar mejor. Despacho gratis en compras sobre $500.000.
     </p>
     <div class="actions">
       <a class="btn btn-primary" routerLink="/catalogo">Explorar productos</a>
-      <a class="btn btn-ghost" routerLink="/catalogo">Ver categorías</a>
+      <a class="btn btn-ghost" routerLink="/catalogo" [queryParams]="{ c: 'CELULARES' }">Ver celulares</a>
     </div>
   </div>
   <div class="hero-art panel">
@@ -21,24 +21,46 @@
 
 <section class="section-heading">
   <div>
+    <p class="kicker">Categorías</p>
+    <h2>Explora por tipo de equipo</h2>
+  </div>
+</section>
+<div class="chip-row" style="margin-top: 0">
+  @for (category of categories; track category.id) {
+    <a class="chip" routerLink="/catalogo" [queryParams]="{ c: category.id }" style="text-decoration: none">{{ category.label }}</a>
+  }
+</div>
+
+<section class="section-heading" style="margin-top: 2.5rem">
+  <div>
     <p class="kicker">Selección de la semana</p>
     <h2>Lo que está llamando la atención</h2>
   </div>
   <a class="text-link" routerLink="/catalogo">Ver todo →</a>
 </section>
 @if (error()) {
-  <p class="alert">{{ error() }}</p>
+  <p class="alert" role="alert">{{ error() }}</p>
 }
-<div class="grid">
-  @for (item of featured(); track item.id) {
-    <article class="panel card">
-      <img [src]="item.imageUrl" [alt]="item.name" />
-      <p class="muted">{{ item.brand }} · {{ item.category }}</p>
-      <h3>{{ item.name }}</h3>
-      <p class="price">{{ formatClp(item.price) }}</p>
-      <div class="actions">
-        <a class="btn btn-ghost" [routerLink]="['/catalogo', item.id]">Ver detalle</a>
-      </div>
-    </article>
-  }
-</div>
+@if (loading()) {
+  <div class="grid" aria-busy="true">
+    @for (item of skeletons; track item) {
+      <div class="panel skeleton skeleton-card"></div>
+    }
+  </div>
+} @else {
+  <div class="grid">
+    @for (item of featured(); track item.id) {
+      <article class="panel card">
+        <a [routerLink]="['/catalogo', item.id]">
+          <img [src]="item.imageUrl" [alt]="item.name" loading="lazy" />
+        </a>
+        <p class="muted">{{ item.brand }} · {{ item.category }}</p>
+        <h3>{{ item.name }}</h3>
+        <p class="price">{{ formatClp(item.price) }}</p>
+        <div class="actions">
+          <a class="btn btn-ghost" [routerLink]="['/catalogo', item.id]">Ver detalle</a>
+        </div>
+      </article>
+    }
+  </div>
+}

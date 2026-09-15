@@ -550,35 +550,36 @@ El despliegue AWS todavía necesita:
 - Terraform.
 - Azure CLI si se desea administrar Entra mediante Terraform.
 
-### 10.2 Variables Azure AD
+### 10.2 Perfiles de seguridad
+
+| Perfil | Quién firma el token | Uso |
+|---|---|---|
+| `local` (por defecto) | HS256 con `JWT_LOCAL_SECRET` | Pruebas con `curl` sin Entra |
+| `azuread` | Microsoft Entra ID (JWKS del tenant) | Demo real con login MSAL desde el frontend |
+
+Variables del perfil `azuread` (el script ya trae estos valores por defecto):
 
 ```bash
-export SPRING_PROFILES_ACTIVE=azuread
 export AZURE_TENANT_ID="72fd0b5a-8a6a-4cff-89f6-bde961f7e250"
 export AZURE_API_AUDIENCE="097bfd84-a8e3-4232-9048-718f4d648efd"
+# Correos (preferred_username) u oid que reciben ROLE_ADMIN en el BFF
+export APP_ADMIN_USERS="tu.correo@duocuc.cl"
 ```
 
 ### 10.3 Levantar servicios
 
-Cada servicio debe ejecutarse en una terminal separada:
+Un solo comando compila y levanta el BFF más los 8 microservicios en segundo plano
+(logs en `.run/logs/<servicio>.log`, PIDs en `.run/pids/`):
 
 ```bash
-cd services/catalog-service && mvn spring-boot:run
-cd services/cart-service && mvn spring-boot:run
-cd services/order-service && mvn spring-boot:run
-cd services/notification-service && mvn spring-boot:run
-cd services/inventory-service && mvn spring-boot:run
-cd services/payment-service && mvn spring-boot:run
-cd services/shipping-service && mvn spring-boot:run
-cd services/review-service && mvn spring-boot:run
+scripts/start-all.sh                  # perfil local (JWT HS256 de desarrollo)
+scripts/start-all.sh azuread          # perfil azuread (tokens reales de Entra)
+scripts/start-all.sh azuread --no-build
+scripts/stop-all.sh                   # detiene todo
 ```
 
-Backend:
-
-```bash
-cd backend
-sh ./mvnw spring-boot:run
-```
+Si prefieres hacerlo a mano, cada servicio se ejecuta con `mvn spring-boot:run`
+desde su carpeta (`services/<nombre>` y `backend`) con `SPRING_PROFILES_ACTIVE` definido.
 
 Frontend:
 
@@ -630,15 +631,38 @@ curl -i -X POST http://localhost:8080/api/payments/intent \
   -d '{"amount":1000,"method":"SIMULATED_CARD"}'
 ```
 
+Todas las respuestas de error siguen RFC 7807 (`application/problem+json`):
+
+```json
+{"type":"about:blank","title":"Unauthorized","status":401,
+ "detail":"Debes enviar un token Bearer emitido por Microsoft Entra ID","instance":"/api/me"}
+```
+
+Códigos que devuelve el BFF y que se pueden demostrar:
+
+| Caso | Código |
+|---|---|
+| Ruta pública | 200 |
+| Ruta privada sin token / token expirado / firma inválida / emisor o audiencia distintos | 401 |
+| Token válido sin scope `access_as_user` o sin `ROLE_ADMIN` en `/api/admin/**` | 403 |
+| Producto o pedido inexistente | 404 |
+| Cantidad inválida, reseña fuera de rango, comuna vacía | 400 |
+| Stock insuficiente o reseña duplicada | 409 |
+| Microservicio caído | 503 |
+
 Validaciones realizadas durante el desarrollo:
 
-- Backend BFF: tests Maven correctos.
-- Catálogo: tests Maven correctos.
-- Nuevos servicios: compilación Maven correcta.
-- Frontend: `npm run build` correcto con Node 24.
-- Terraform: `terraform validate` correcto.
-- Health de los nuevos servicios: `200`.
-- Rutas privadas sin token: `401`.
+- BFF: `mvn test` (6 tests, incluye `SecurityRulesTests`: 200 público, 401 sin token,
+  401 token expirado, 200 usuario autenticado, 403 usuario sin rol admin).
+- 8 microservicios: compilación Maven correcta.
+- Frontend: `ng build` correcto con Node 24.
+- Flujo completo por `curl` en perfil `local`: carrito → cotización → pago simulado →
+  checkout con reserva de inventario/catálogo → pedido → notificación; y escenario de
+  compensación (segundo ítem sin stock libera la reserva del primero).
+- Perfil `azuread`: `MsalGuard` redirige a `login.microsoftonline.com/<tenant>` con
+  `client_id`, `scope=api://nexotech-student-api/access_as_user`,
+  `redirect_uri=http://localhost:4200/auth` y PKCE S256; el BFF rechaza con 401 los
+  tokens no firmados por el tenant.
 
 ---
 
@@ -657,21 +681,31 @@ Validaciones realizadas durante el desarrollo:
 - Reseñas.
 - Notificaciones.
 - MSAL y Entra ID.
-- Validación JWT en BFF y microservicios.
+- Validación JWT en BFF y microservicios (firma, emisor, audiencia, vigencia, scope).
+- Autorización por rol: `/api/admin/**` exige `ROLE_ADMIN` (claim `roles` o lista `APP_ADMIN_USERS`).
+- Errores RFC 7807 en toda la cadena; el BFF propaga el código real del microservicio.
+- Checkout con reserva atómica en inventario y catálogo, y compensación si falla algún ítem.
+- Panel de administración (inventario y reposición de stock) y vista de perfil con
+  claims del ID token, del access token y de `/api/me`.
 - Terraform para API Gateway y Entra.
 
 ### Limitaciones actuales
 
 1. Las bases principales usan H2 en memoria y pierden datos al reiniciar.
 2. Inventario y reseñas usan estructuras en memoria.
-3. El pago es simulado y no utiliza un proveedor real.
+3. El pago es simulado por diseño: `payment-service` autoriza cualquier monto válido,
+   no contacta a ningún proveedor ni almacena datos de tarjeta.
 4. El despacho es simulado y no conecta con un operador logístico.
 5. No existe todavía un servicio de configuración centralizada.
 6. No existe observabilidad centralizada con logs, métricas y trazas.
 7. AWS API Gateway está definido, pero no aplicado debido a credenciales AWS pendientes.
 8. El backend todavía necesita una URL pública para ser integrado desde API Gateway.
 9. Solo algunos servicios tienen Dockerfile; se recomienda agregar uno por servicio.
-10. El checkout coordina varios servicios sin una saga o mecanismo de compensación completo.
+10. El checkout compensa las reservas de stock si falla un ítem, pero no es una saga
+    completa: si el pago simulado se autoriza y luego falla la orden, el pago queda
+    registrado como autorizado sin reverso (aceptable al ser simulado).
+11. El tenant no tiene app roles definidos, por lo que el claim `roles` llega vacío;
+    `ROLE_ADMIN` se asigna desde `APP_ADMIN_USERS`.
 
 ---
 
