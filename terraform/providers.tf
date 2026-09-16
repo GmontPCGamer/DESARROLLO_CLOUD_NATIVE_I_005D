@@ -12,10 +12,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    azuread = {
-      source  = "hashicorp/azuread"
-      version = "~> 3.0"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -26,13 +22,7 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  # Credenciales: recomiendan AWS SSO / IAM Role asumido o variables de entorno
-  # (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN).
   default_tags {
     tags = var.tags
   }
-}
-
-provider "azuread" {
-  tenant_id = var.azure_tenant_id
 }

@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "Región AWS donde se despliega el API Gateway."
+  description = "Región AWS donde se despliega el stack."
   type        = string
   default     = "us-east-1"
 }
@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "nombre_proyecto" {
   description = "Prefijo de nombres de los recursos."
   type        = string
-  default     = "cloud-native-005d"
+  default     = "nexotech-005d"
 }
 
 variable "tags" {
@@ -15,19 +15,13 @@ variable "tags" {
   type        = map(string)
   default = {
     Proyecto     = "DESARROLLO_CLOUD_NATIVE_I_005D"
-    Entorno      = "desarrollo"
+    Entorno      = "demo-48h"
     Administrado = "terraform"
   }
 }
 
-variable "url_backend" {
-  description = "URL base del backend (Spring Boot) al que API Gateway reenvía el tráfico."
-  type        = string
-  default     = "https://REEMPLAZAR-URL-BACKEND"
-}
-
 variable "cors_origenes" {
-  description = "Orígenes permitidos para CORS (dominio del frontend Angular)."
+  description = "Orígenes CORS adicionales (CloudFront se agrega solo)."
   type        = list(string)
   default     = ["http://localhost:4200"]
 }
@@ -35,26 +29,43 @@ variable "cors_origenes" {
 variable "issuer_uri" {
   description = "Issuer del authorizer JWT (Azure AD / Entra ID v2)."
   type        = string
-  default     = "https://login.microsoftonline.com/REEMPLAZAR-TENANT/v2.0"
+  default     = "https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250/v2.0"
 }
 
 variable "audiencia" {
-  description = "Audiencia esperada en el token (clientId de la app registrada en Azure AD)."
+  description = "Audiencia esperada en el token (clientId de NexoTech Demo SPA)."
   type        = string
-  default     = "REEMPLAZAR-CLIENT-ID"
-}
-
-variable "gestionar_entra" {
-  description = "Crea los registros de aplicación de Microsoft Entra ID mediante Terraform."
-  type        = bool
-  default     = false
+  default     = "f7d7e5dd-430c-4adb-9348-9ecd974b220c"
 }
 
 variable "azure_tenant_id" {
   description = "Directory (tenant) ID de Microsoft Entra."
   type        = string
-  sensitive   = true
-  default     = "REEMPLAZAR-TENANT-ID"
+  default     = "72fd0b5a-8a6a-4cff-89f6-bde961f7e250"
+}
+
+variable "ec2_instance_type" {
+  description = "Tipo de instancia EC2 (demo corta: t3.medium)."
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "ec2_key_name" {
+  description = "Key pair de AWS Academy."
+  type        = string
+  default     = "vockey"
+}
+
+variable "ec2_instance_profile" {
+  description = "Instance profile de AWS Academy."
+  type        = string
+  default     = "LabInstanceProfile"
+}
+
+variable "app_admin_users" {
+  description = "preferred_username que reciben ROLE_ADMIN en el BFF."
+  type        = string
+  default     = "fe.ardiles@duocuc.cl"
 }
 
 variable "entra_api_nombre" {
