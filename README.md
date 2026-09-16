@@ -16,12 +16,14 @@ La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta
 
 | Qué | URL |
 |-----|-----|
-| **Frontend (HTTPS)** | https://18-211-7-130.sslip.io |
+| **Frontend (HTTPS, demo)** | https://neutral-lover-realized-collaboration.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 | `i-098478353e2ca4634` · EIP `18.211.7.130` |
+| EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` · también `https://18-211-7-130.sslip.io` |
 
-> Si la instancia se destruye o cambia la IP, actualiza estas URLs y los redirects de Entra. Tras la presentación: `cd terraform && terraform destroy`.
+> **URL pública a usar:** el tunnel de Cloudflare. En redes con filtro (p. ej. Duoc) `*.sslip.io` responde *Web Filter Violation* (403). El tunnel apunta a nginx en la EC2.
+>
+> Si se reinicia el lab o muere `cloudflared`, la URL `*.trycloudflare.com` puede cambiar: hay que regenerar el tunnel, actualizar Entra redirects y `environment.ts`. Tras la presentación: `cd terraform && terraform destroy`.
 
 ### Smoke checks rápidos
 
@@ -32,8 +34,8 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 # Privado sin token → 401
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
-# Frontend → 200
-curl -skI "https://18-211-7-130.sslip.io/" | head -n 1
+# Frontend (tunnel) → 200
+curl -sI "https://neutral-lover-realized-collaboration.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -97,9 +99,11 @@ Usuario
             …inventario, pago, despacho, avisos
 ```
 
-### Por qué el frontend está en la EC2
+### Por qué el frontend está en la EC2 (+ tunnel)
 
-AWS Academy **restringe** CloudFront y ciertas operaciones S3 desde Terraform. La SPA se sirve con **nginx + Let’s Encrypt** en la misma EC2, usando DNS `sslip.io` sobre la Elastic IP.
+AWS Academy **restringe** CloudFront y ciertas operaciones S3 desde Terraform. La SPA se sirve con **nginx + Let’s Encrypt** en la misma EC2 (`sslip.io` sobre la Elastic IP).
+
+Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunnel** (`cloudflared` en la EC2 → `*.trycloudflare.com`), sin cambiar el origen nginx.
 
 ---
 
@@ -147,14 +151,16 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 | Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
 | Authority | `https://login.microsoftonline.com/72fd0b5a-…` |
 | API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://18-211-7-130.sslip.io/auth` |
-| Logout URI | `https://18-211-7-130.sslip.io` |
+| Redirect URI | `https://neutral-lover-realized-collaboration.trycloudflare.com/auth` |
+| Logout URI | `https://neutral-lover-realized-collaboration.trycloudflare.com` |
 
 Notas importantes:
 
 - Flujo **Authorization Code + PKCE** (sin client secret en Angular).
 - La app antigua `NexoTech Student` (`097bfd84-…`) sigue documentada para local; la **producción demo** usa **NexoTech Demo SPA** porque el portal Duoc no permite editar redirects de la app anterior.
+- En Entra también pueden quedar redirects de `sslip.io` y `localhost` como respaldo.
 - API Gateway y BFF aceptan audiencia `f7d7e5dd-…` y `api://nexotech-demo-api`.
+- CORS del Gateway/BFF incluye el origen del tunnel Cloudflare.
 
 Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexotech-student-api` si esa app tiene redirect `http://localhost:4200/auth`).
 
@@ -164,7 +170,7 @@ Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexo
 
 Definido en Terraform (`terraform/`):
 
-1. **API Gateway HTTP v2** con CORS hacia el origen sslip.io.
+1. **API Gateway HTTP v2** con CORS hacia el tunnel Cloudflare, sslip.io y localhost.
 2. **JWT Authorizer** contra issuer Entra v2 y audiencias de la Demo SPA.
 3. **Rutas**
    - `GET /api/public/{proxy+}` → sin JWT (catálogo anónimo).
@@ -311,7 +317,7 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 | BFF Resource Server | Perfil `azuread`, iss/aud/firma/exp |
 | 401 / 403 / 200 | Demostrable vía Gateway o BFF |
 | API Manager (Gateway) | Terraform aplicado: rutas + JWT + CORS |
-| FE + BE en cloud | sslip.io + execute-api |
+| FE + BE en cloud | tunnel Cloudflare → EC2/nginx + execute-api |
 
 ---
 

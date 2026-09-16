@@ -21,9 +21,12 @@ variable "tags" {
 }
 
 variable "cors_origenes" {
-  description = "Orígenes CORS adicionales (CloudFront se agrega solo)."
+  description = "Orígenes CORS adicionales (sslip.io se agrega solo; tunnel Cloudflare para redes con filtro)."
   type        = list(string)
-  default     = ["http://localhost:4200"]
+  default = [
+    "http://localhost:4200",
+    "https://neutral-lover-realized-collaboration.trycloudflare.com",
+  ]
 }
 
 variable "issuer_uri" {
