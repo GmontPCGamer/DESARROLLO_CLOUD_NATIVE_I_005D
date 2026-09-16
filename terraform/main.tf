@@ -29,7 +29,7 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
 
   jwt_configuration {
     issuer   = var.issuer_uri
-    audience = [var.audiencia, "api://nexotech-demo-api"]
+    audience = [var.audiencia, "api://nexotech-demo-api", "api://b541332a-4305-4111-84f1-b5584ade7d44"]
   }
 }
 

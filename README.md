@@ -12,14 +12,18 @@ Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PR
 
 ## Estado actual (septiembre 2026)
 
-La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h). Login con cuentas del **tenant institucional Duoc**.
+La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h).  
+Login contra el tenant Entra **NextTechDemo** (administrable en portal).
 
-| Qué | URL |
-|-----|-----|
-| **Frontend (HTTPS, demo)** | https://neutral-lover-realized-collaboration.trycloudflare.com |
+| Qué | URL / valor |
+|-----|-------------|
+| **Frontend (HTTPS, demo)** | https://departments-intl-stick-homework.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` · también `https://18-211-7-130.sslip.io` |
+| EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
+| **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
+| Tenant Entra | `f2e0852e-19c3-4785-baa7-f24347e3ccea` (NextTechDemo) |
+| App registration | **NexoTech Demo SPA** · client ID `b541332a-4305-4111-84f1-b5584ade7d44` |
 
 > **URL pública a usar:** el tunnel de Cloudflare. En redes con filtro (p. ej. Duoc) `*.sslip.io` responde *Web Filter Violation* (403). El tunnel apunta a nginx en la EC2.
 >
@@ -35,7 +39,7 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
 # Frontend (tunnel) → 200
-curl -sI "https://neutral-lover-realized-collaboration.trycloudflare.com/" | head -n 1
+curl -sI "https://departments-intl-stick-homework.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -52,9 +56,12 @@ NexoTech es una tienda de hardware (celulares, notebooks, consolas, etc.) pensad
 
 ### Quién puede iniciar sesión
 
-- Cualquier usuario del **tenant Duoc** (`AzureADMyOrg`).
-- Rol **Administración** en el BFF solo para correos listados en `APP_ADMIN_USERS` (hoy: `fe.ardiles@duocuc.cl`).
-- Cuentas personales / otros tenants **no** entran (app single-tenant).
+- Usuarios del tenant **NextTechDemo** (`f2e0852e-…`), single-tenant.
+- La cuenta Duoc `fe.ardiles@duocuc.cl` está invitada/vinculada a ese tenant (login con autenticador).
+- **Administrador de la aplicación** (menú Administración / `/admin`): solo  
+  **`fe.ardiles@duocuc.cl`** vía `APP_ADMIN_USERS` → `ROLE_ADMIN` en el BFF.  
+  (No es Global Admin de Azure; es admin de negocio de NexoTech.)
+- Otras cuentas del mismo tenant entran como usuario normal (carrito, perfil, etc.).
 
 ---
 
@@ -72,7 +79,7 @@ Usuario
                │ login
                ▼
 ┌─────────────────────────────────────┐
-│  Microsoft Entra ID (tenant Duoc)   │
+│  Microsoft Entra ID (NextTechDemo)  │
 │  App: NexoTech Demo SPA             │
 │  Scope: api://nexotech-demo-api/    │
 │         access_as_user              │
@@ -147,19 +154,19 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 
 | Parámetro | Valor |
 |-----------|--------|
-| Tenant | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
-| Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
-| Authority | `https://login.microsoftonline.com/72fd0b5a-…` |
+| Tenant | `f2e0852e-19c3-4785-baa7-f24347e3ccea` (NextTechDemo) |
+| Client ID (SPA+API) | `b541332a-4305-4111-84f1-b5584ade7d44` |
+| Authority | `https://login.microsoftonline.com/f2e0852e-…` |
 | API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://neutral-lover-realized-collaboration.trycloudflare.com/auth` |
-| Logout URI | `https://neutral-lover-realized-collaboration.trycloudflare.com` |
+| Redirect URI | `https://departments-intl-stick-homework.trycloudflare.com/auth` |
+| Logout URI | `https://departments-intl-stick-homework.trycloudflare.com` |
 
 Notas importantes:
 
 - Flujo **Authorization Code + PKCE** (sin client secret en Angular).
-- La app antigua `NexoTech Student` (`097bfd84-…`) sigue documentada para local; la **producción demo** usa **NexoTech Demo SPA** porque el portal Duoc no permite editar redirects de la app anterior.
+- Tenant de demo administrable en portal (creado desde la cuenta Duoc); App registration **NexoTech Demo SPA** visible en Entra.
 - En Entra también pueden quedar redirects de `sslip.io` y `localhost` como respaldo.
-- API Gateway y BFF aceptan audiencia `f7d7e5dd-…` y `api://nexotech-demo-api`.
+- API Gateway y BFF aceptan audiencia `b541332a-…` y `api://nexotech-demo-api`.
 - CORS del Gateway/BFF incluye el origen del tunnel Cloudflare.
 
 Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexotech-student-api` si esa app tiene redirect `http://localhost:4200/auth`).
@@ -213,8 +220,8 @@ Variables típicas para `azuread` (no commitear secretos):
 
 ```bash
 export SPRING_PROFILES_ACTIVE=azuread
-export AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
-export AZURE_API_AUDIENCE=f7d7e5dd-430c-4adb-9348-9ecd974b220c,api://nexotech-demo-api
+export AZURE_TENANT_ID=f2e0852e-19c3-4785-baa7-f24347e3ccea
+export AZURE_API_AUDIENCE=b541332a-4305-4111-84f1-b5584ade7d44,api://nexotech-demo-api
 export APP_ADMIN_USERS=fe.ardiles@duocuc.cl
 export APP_CORS_ORIGINS=http://localhost:4200
 ```
@@ -321,7 +328,75 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 
 ---
 
-## 10. Calidad
+## 10. Guía de demostración en portales + guión (~10 min)
+
+### 10.1 Antes de empezar (checklist)
+
+- [ ] Lab AWS Academy **activo** + `aws configure` vigente  
+- [ ] Abrir SPA: https://departments-intl-stick-homework.trycloudflare.com  
+- [ ] Portal Azure en directorio **NextTechDemo** (`f2e0852e-…`)  
+- [ ] Consola AWS región **us-east-1**  
+- [ ] Terminal con los curls 200/401 listos  
+- [ ] Login de prueba: **`fe.ardiles@duocuc.cl`** (admin de la app)
+
+### 10.2 Dónde está cada cosa en Azure (Entra)
+
+1. https://portal.azure.com → avatar → **Switch directory** → **NextTechDemo**.  
+2. Busca **Microsoft Entra ID**.
+
+| Pantalla | Qué mostrar | Qué decir |
+|----------|-------------|-----------|
+| **Overview** | Tenant ID `f2e0852e-…` | “Directorio dedicado al proyecto” |
+| **App registrations** → **NexoTech Demo SPA** | Client ID `b541332a-…` | “Registro de la SPA + API” |
+| **Authentication** | Redirect `…trycloudflare.com/auth` | “SPA + PKCE, sin client secret” |
+| **Expose an API** | URI `api://nexotech-demo-api`, scope `access_as_user` | “Scope que pide MSAL” |
+| **API permissions** | Permiso delegado al scope | “La app pide acceso a su propia API” |
+
+En la SPA (otra pestaña): **Iniciar sesión** → pantalla Microsoft → volver logueado → DevTools Network → `Authorization: Bearer` → pegar en https://jwt.ms → mostrar `iss` / `aud` / `preferred_username`.
+
+### 10.3 Dónde está cada cosa en AWS (API Manager + runtime)
+
+Consola: región **N. Virginia (us-east-1)**.
+
+| Servicio | Ruta en consola | Qué señalar |
+|----------|-----------------|-------------|
+| **API Gateway** (= API Manager) | API Gateway → HTTP APIs → `nexotech-005d-api` (`ourd5f7qr1`) | Rutas, authorizer, CORS, stage `dev` |
+| **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
+| **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant NextTechDemo; audiences = clientId + `api://nexotech-demo-api` |
+| **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
+| **EC2** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
+| **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la demo |
+| **Security Group** | de la instancia | Puertos 80, 443, 8080, 22 |
+| **S3** (opcional) | bucket `nexotech-jars-7717` | jars y zip de la SPA |
+| **Terraform** (repo) | `terraform/main.tf`, `ec2.tf` | “Infra como código” |
+
+Curls en vivo (API Manager):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/products   # 200
+
+curl -s -o /dev/null -w "%{http_code}\n" \
+  https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me                 # 401
+```
+
+### 10.4 Guión hablado (sugerido)
+
+| Min | Bloque | Acción en pantalla |
+|-----|--------|-------------------|
+| 0:00–0:40 | Contexto | Diagrama README: SPA → Entra → Gateway → BFF → 8 MS |
+| 0:40–3:30 | **MSAL 60%** | SPA tunnel → login → Network Bearer → jwt.ms → perfil/admin |
+| 3:30–5:00 | **Entra visual** | Portal: tenant + app + Authentication + Expose an API |
+| 5:00–7:30 | **API Manager 40%** | Gateway routes + authorizer + curls 200/401 |
+| 7:30–8:30 | **Runtime AWS** | EC2 + EIP (+ S3 opcional) |
+| 8:30–10:00 | Cierre rúbrica | “MSAL autentica; Gateway y BFF validan el mismo JWT” |
+
+**Frase de cierre:**  
+> *“Entra emite el JWT; API Gateway actúa como API Manager en el borde; el BFF vuelve a validar y orquesta ocho microservicios. FE y BE están en la nube.”*
+
+---
+
+## 11. Calidad
 
 ```bash
 # Frontend
@@ -336,19 +411,20 @@ cd terraform && terraform fmt -check -recursive && terraform validate
 
 ---
 
-## 11. Hitos
+## 12. Hitos
 
 - [x] Scaffold Angular + MSAL + BFF + 8 MS  
 - [x] Entra ID (login real, PKCE, claims, admin por lista)  
 - [x] Terraform API Gateway JWT + CORS  
 - [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
 - [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
+- [x] Tenant Entra propio (NextTechDemo) visible en portal  
 - [ ] CI/CD (GitHub Actions)  
 - [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
 
 ---
 
-## 12. Equipo / licencia
+## 13. Equipo / licencia
 
 Proyecto académico — **DESARROLLO_CLOUD_NATIVE_I_005D**.  
 Repositorio: `GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D` · rama `main`.
