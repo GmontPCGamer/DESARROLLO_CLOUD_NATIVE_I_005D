@@ -1,188 +1,348 @@
-# DESARROLLO_CLOUD_NATIVE_I_005D — Capa I (Cloud Native de referencia)
+# NexoTech — DESARROLLO_CLOUD_NATIVE_I_005D
 
-> Proyecto de la asignatura **DESARROLLO_CLOUD_NATIVE_I_005D** (Cloud Native).
-> Plataforma de referencia: **SPA Angular + MSAL** → **API Gateway (AWS) con authorizer JWT de Azure AD / Entra ID** → **backend Spring Boot (OAuth2 Resource Server)**.
+Tienda cloud-native de demostración para la asignatura **Desarrollo Cloud Native I (005D)**.
 
-Para una explicación completa de negocio, arquitectura, servicios, seguridad, ejecución y próximos pasos, revisar [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md).
+Flujo real en producción (demo):
+
+**Angular + MSAL** → **Microsoft Entra ID** → **AWS API Gateway (JWT Authorizer)** → **BFF Spring Boot** → **8 microservicios**
+
+Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md) · Guión de presentación: [GUIÓN_PRESENTACIÓN_EP2.md](GUIÓN_PRESENTACIÓN_EP2.md) · Entra: [MICROSOFT_ENTRA_CONFIG.md](MICROSOFT_ENTRA_CONFIG.md)
 
 ---
 
-## 1. Stack
+## Estado actual (septiembre 2026)
+
+La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h). Login con cuentas del **tenant institucional Duoc**.
+
+| Qué | URL |
+|-----|-----|
+| **Frontend (HTTPS)** | https://18-211-7-130.sslip.io |
+| **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
+| **BFF directo (debug)** | http://18.211.7.130:8080 |
+| EC2 | `i-098478353e2ca4634` · EIP `18.211.7.130` |
+
+> Si la instancia se destruye o cambia la IP, actualiza estas URLs y los redirects de Entra. Tras la presentación: `cd terraform && terraform destroy`.
+
+### Smoke checks rápidos
+
+```bash
+# Catálogo público → 200
+curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/products" | head -c 120
+
+# Privado sin token → 401
+curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
+
+# Frontend → 200
+curl -skI "https://18-211-7-130.sslip.io/" | head -n 1
+```
+
+---
+
+## 1. Qué es el proyecto (visión general)
+
+NexoTech es una tienda de hardware (celulares, notebooks, consolas, etc.) pensada para **demostrar identidad + API Management + microservicios**, no para producción comercial.
+
+- Catálogo **público** (sin sesión).
+- Carrito, compras, avisos, perfil y admin **con login Microsoft**.
+- Pago **simulado** (sin pasarela real).
+- Persistencia **H2 en memoria** en la demo cloud (sin RDS, para ahorrar créditos).
+- Tres capas de seguridad JWT: **Entra firma** → **API Gateway filtra** → **BFF/MS validan de nuevo**.
+
+### Quién puede iniciar sesión
+
+- Cualquier usuario del **tenant Duoc** (`AzureADMyOrg`).
+- Rol **Administración** en el BFF solo para correos listados en `APP_ADMIN_USERS` (hoy: `fe.ardiles@duocuc.cl`).
+- Cuentas personales / otros tenants **no** entran (app single-tenant).
+
+---
+
+## 2. Arquitectura
+
+```
+Usuario
+  │
+  ▼
+┌─────────────────────────────────────┐
+│  SPA Angular (nginx + HTTPS)        │
+│  MSAL: loginRedirect + PKCE         │
+│  MsalGuard / MsalInterceptor        │
+└──────────────┬──────────────────────┘
+               │ login
+               ▼
+┌─────────────────────────────────────┐
+│  Microsoft Entra ID (tenant Duoc)   │
+│  App: NexoTech Demo SPA             │
+│  Scope: api://nexotech-demo-api/    │
+│         access_as_user              │
+└──────────────┬──────────────────────┘
+               │ access_token (JWT)
+               ▼
+┌─────────────────────────────────────┐
+│  AWS API Gateway HTTP v2            │
+│  • GET /api/public/{proxy+}  (sin JWT)
+│  • OPTIONS /{proxy+}         (CORS)
+│  • ANY /{proxy+}             (JWT Authorizer)
+└──────────────┬──────────────────────┘
+               │ proxy HTTP
+               ▼
+┌─────────────────────────────────────┐
+│  EC2 — BFF Spring Boot :8080        │
+│  OAuth2 Resource Server (azuread)   │
+└──────────────┬──────────────────────┘
+               │
+     ┌─────────┼─────────┬──────────┐
+     ▼         ▼         ▼          ▼
+  :8081     :8082     :8083 …    :8088
+ catálogo   carrito   órdenes    reseñas
+            …inventario, pago, despacho, avisos
+```
+
+### Por qué el frontend está en la EC2
+
+AWS Academy **restringe** CloudFront y ciertas operaciones S3 desde Terraform. La SPA se sirve con **nginx + Let’s Encrypt** en la misma EC2, usando DNS `sslip.io` sobre la Elastic IP.
+
+---
+
+## 3. Stack y estructura del repo
 
 | Capa | Tecnología | Carpeta |
 |------|------------|---------|
-| **Frontend** | Angular 22 (standalone) + `@azure/msal-angular` / `@azure/msal-browser` | `frontend/` |
-| **Infraestructura** | Terraform (AWS API Gateway HTTP v2 + authorizer JWT) | `terraform/` |
-| **Backend** | Spring Boot 4 + Spring Security OAuth2 Resource Server | `backend/` |
-
-Microservicios de negocio:
+| Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
+| BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
+| Microservicios | Spring Boot 4 (8 servicios) | `services/*-service/` |
+| Infra | Terraform (API GW + EC2 + EIP + SG) | `terraform/` |
+| Deploy | Scripts bash (local + EC2) | `scripts/` |
 
 | Servicio | Puerto | Responsabilidad |
-|----------|--------|----------------|
-| `catalog-service` | 8081 | Productos, categorías y stock base |
-| `cart-service` | 8082 | Carritos por usuario |
-| `order-service` | 8083 | Checkout, compras y coordinación |
-| `notification-service` | 8084 | Avisos de compra y sistema |
-| `inventory-service` | 8085 | Disponibilidad y reservas de inventario |
-| `payment-service` | 8086 | Intenciones de pago simuladas |
-| `shipping-service` | 8087 | Cotización y seguimiento de despacho |
-| `review-service` | 8088 | Reseñas públicas y opiniones autenticadas |
+|----------|--------|-----------------|
+| `backend` (BFF) | 8080 | Agregación, authz, `/api/me`, admin |
+| `catalog-service` | 8081 | Productos y stock base |
+| `cart-service` | 8082 | Carrito por usuario |
+| `order-service` | 8083 | Checkout y compras |
+| `notification-service` | 8084 | Avisos |
+| `inventory-service` | 8085 | Reservas de inventario |
+| `payment-service` | 8086 | Pago simulado |
+| `shipping-service` | 8087 | Cotización / despacho |
+| `review-service` | 8088 | Reseñas |
+
+Rutas Angular relevantes:
+
+| Ruta | Acceso |
+|------|--------|
+| `/`, `/catalogo`, `/catalogo/:id` | Públicas |
+| `/auth` | Callback MSAL |
+| `/carrito`, `/compras`, `/notificaciones`, `/perfil` | `MsalGuard` |
+| `/admin` | `MsalGuard` + `ROLE_ADMIN` en BFF |
+| `/acceso-denegado` | Login cancelado / fallido |
 
 ---
 
-## 2. Requisitos previos
+## 4. Microsoft Entra ID (cómo está configurado ahora)
 
-- Node.js >= 22 y npm (Angular CLI)
-- Java 17 (Temurin) y Maven (usar `./mvnw.cmd`)
-- Terraform >= 1.6
-- AWS CLI configurado (para Terraform) y cuenta AWS
-- Una **app registrada en Azure AD / Entra ID** con:
-  - `clientId`, `tenantId` y, si se valida por issuer, el `issuer-uri`:
-    `https://login.microsoftonline.com/{tenant-id}/v2.0`
-  - Scope delegado `api://nexotech-student-api/access_as_user` para las operaciones protegidas
+Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
+
+| Parámetro | Valor |
+|-----------|--------|
+| Tenant | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
+| Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
+| Authority | `https://login.microsoftonline.com/72fd0b5a-…` |
+| API URI / scope | `api://nexotech-demo-api/access_as_user` |
+| Redirect URI | `https://18-211-7-130.sslip.io/auth` |
+| Logout URI | `https://18-211-7-130.sslip.io` |
+
+Notas importantes:
+
+- Flujo **Authorization Code + PKCE** (sin client secret en Angular).
+- La app antigua `NexoTech Student` (`097bfd84-…`) sigue documentada para local; la **producción demo** usa **NexoTech Demo SPA** porque el portal Duoc no permite editar redirects de la app anterior.
+- API Gateway y BFF aceptan audiencia `f7d7e5dd-…` y `api://nexotech-demo-api`.
+
+Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexotech-student-api` si esa app tiene redirect `http://localhost:4200/auth`).
 
 ---
 
-## 3. Cómo levantar el proyecto
+## 5. AWS (cómo está montado)
 
-### 3.1 Backend (BFF + 8 microservicios Spring Boot)
+Definido en Terraform (`terraform/`):
 
-Forma rápida (macOS/Linux): compila y levanta los 9 servicios en segundo plano.
+1. **API Gateway HTTP v2** con CORS hacia el origen sslip.io.
+2. **JWT Authorizer** contra issuer Entra v2 y audiencias de la Demo SPA.
+3. **Rutas**
+   - `GET /api/public/{proxy+}` → sin JWT (catálogo anónimo).
+   - `OPTIONS /{proxy+}` → sin JWT (preflight CORS).
+   - `ANY /{proxy+}` → JWT obligatorio.
+4. **EC2** `t3.medium` + Elastic IP + security group (22/80/443/8080).
+5. User-data / scripts instalan Java; jars y SPA se publican vía scripts / SSM.
 
-```bash
-scripts/start-all.sh            # perfil local (JWT HS256 de desarrollo)
-scripts/start-all.sh azuread    # perfil azuread (login real con Microsoft Entra ID)
-scripts/stop-all.sh             # detiene todo · logs en .run/logs/
-```
-
-Forma manual (un servicio por terminal):
-
-```bash
-cd backend
-./mvnw.cmd spring-boot:run
-# si solo quieres compilar:  ./mvnw.cmd -DskipTests package
-```
-
-Perfiles disponibles:
-
-| Perfil | Uso | Auth |
-|--------|-----|------|
-| `local` (default) | Desarrollo sin Azure; HS256 con secret local | JWT HS256 |
-| `azuread` | Producción real contra Entra ID | JWT RS256 (JWKS) |
-
-Selección de perfil con variable de entorno (dev local no usa Azure):
+Outputs útiles:
 
 ```bash
-# Windows PowerShell
-$env:SPRING_PROFILES_ACTIVE = "local"; ./mvnw.cmd spring-boot:run
+cd terraform
+terraform output
+# frontend_url, url_deploy, ec2_public_ip, ec2_instance_id, …
 ```
 
-Para el perfil `azuread`, define (sin commitear):
+---
 
-```
-AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
-AZURE_API_AUDIENCE=097bfd84-a8e3-4232-9048-718f4d648efd
-APP_ADMIN_USERS=tu.correo@duocuc.cl        # quién recibe ROLE_ADMIN (/api/admin/**)
-# (opcional, solo perfil local)
-JWT_LOCAL_SECRET=<base64>
-```
+## 6. Cómo levantar en local
 
-Prueba rápida:
+### Requisitos
+
+- Node.js ≥ 22, npm  
+- Java 17, Maven Wrapper (`./mvnw` / `./mvnw.cmd`)  
+- (Opcional) Terraform ≥ 1.6, AWS CLI, cuenta AWS Academy  
+
+### 6.1 Backend + microservicios
 
 ```bash
-# Health público (no requiere token)
-curl http://localhost:8080/api/public/health
+# Perfil local (JWT HS256 de desarrollo, sin Entra)
+scripts/start-all.sh
 
-# Ruta protegida (requiere token Bearer). Sin token -> 401
-curl -i http://localhost:8080/api/me
+# Perfil azuread (valida JWTs reales de Entra)
+scripts/start-all.sh azuread
+
+scripts/stop-all.sh   # logs en .run/logs/
 ```
 
-### 3.2 Frontend (Angular + MSAL)
+Variables típicas para `azuread` (no commitear secretos):
+
+```bash
+export SPRING_PROFILES_ACTIVE=azuread
+export AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
+export AZURE_API_AUDIENCE=f7d7e5dd-430c-4adb-9348-9ecd974b220c,api://nexotech-demo-api
+export APP_ADMIN_USERS=fe.ardiles@duocuc.cl
+export APP_CORS_ORIGINS=http://localhost:4200
+```
+
+Pruebas:
+
+```bash
+curl http://localhost:8080/api/public/products
+curl -i http://localhost:8080/api/me          # → 401 sin token
+```
+
+### 6.2 Frontend
 
 ```bash
 cd frontend
 npm install
-npm start    # -> http://localhost:4200
+npm start    # http://localhost:4200
 ```
 
-Configura MSAL en `frontend/src/environments/environment.development.ts`:
+Ajusta `frontend/src/environments/environment.development.ts` si cambias clientId / scope / redirects.
 
-```ts
-export const environment = {
-  production: false,
-  msal: {
-    clientId: 'TU_CLIENT_ID',
-    authority: 'https://login.microsoftonline.com/TU_TENANT_ID',
-    apiScope: 'api://nexotech-student-api/access_as_user',
-    redirectUri: 'http://localhost:4200/auth',
-  },
-  backendApiUrl: 'http://localhost:8080',
-};
-```
-
-Rutas:
-- `/` → pública
-- `/catalogo` y `/catalogo/:id` → catálogo público de solo lectura
-- `/perfil` → **protegida** por `MsalGuard`
-- `/carrito`, `/compras` y `/notificaciones` → **protegidas** por `MsalGuard` y token Bearer
-- `/admin` → protegida por `MsalGuard` **y** por rol: el BFF responde 403 sin `ROLE_ADMIN`
-- `/acceso-denegado` → destino de `MsalGuard` si el login falla o se cancela
-- `/catalogo/:id` incluye reseñas públicas; publicar reseñas requiere sesión (una por usuario y producto).
-- El checkout cotiza despacho, autoriza un **pago simulado** (sin proveedor real) y reserva stock
-  en inventario y catálogo con compensación si algún ítem falla.
-- `/auth` → callback de redirección MSAL (`MsalRedirectComponent`)
-
-### 3.3 Terraform (infraestructura AWS)
+### 6.3 Build de producción (SPA)
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # y rellena URL del backend + issuer
-cp variables.tf                                # (añade secret/issuer si usas HS256 local)
+cd frontend
+npm run build -- --configuration=production
+# salida: frontend/dist/frontend/browser
+```
 
+---
+
+## 7. Cómo desplegar / actualizar en AWS
+
+Orden típico:
+
+```bash
+# 1) Infra
+cd terraform
 terraform init
-terraform fmt -recursive
-terraform validate
 terraform plan -out=tfplan
 terraform apply tfplan
+
+# 2) Compilar jars (backend + services)
+# 3) Subir y arrancar en EC2
+../scripts/deploy-ec2.sh
+
+# 4) Build SPA + publicar en nginx (script o zip vía S3/SSM)
+../scripts/deploy-frontend.sh
 ```
 
-> Estado: por defecto local (`terraform.tfstate`). Para equipo se recomienda un
-> backend remoto (S3 + DynamoDB).
+En Academy, si SSH con `vockey.pem` falla, el despliegue se hace con **AWS Systems Manager (SSM)** + bucket S3 auxiliar para jars/SPA.
+
+Tras cambiar IP o dominio:
+
+1. Actualiza redirects SPA en Entra.  
+2. Actualiza `environment.ts` (`redirectUri`, `backendApiUrl`).  
+3. Rebuild + redeploy frontend.  
+4. Revisa `APP_CORS_ORIGINS` en la EC2.
+
+Para apagar costos:
+
+```bash
+cd terraform && terraform destroy
+```
 
 ---
 
-## 4. Flujo de autenticación (MSAL → Azure AD → API Gateway → Backend)
+## 8. Flujo de autenticación (detalle)
 
 ```
-Angular (MSAL) --loginRedirect--> Azure AD/Entra ID
-   <- redirect con code ->  MSAL exchangea por access_token
-Angular --Authorization: Bearer <JWT>--> API Gateway (authorizer JWT valida firma+iss+aud)
-   --proxy--> Backend Spring Boot (OAuth2 Resource Server valida JWT de nuevo)
+1. Usuario → SPA → MSAL loginRedirect (prompt select_account)
+2. Entra autentica (PKCE) y redirige a /auth
+3. MSAL guarda sesión y obtiene access_token para api://nexotech-demo-api/access_as_user
+4. MsalInterceptor agrega Authorization: Bearer <JWT> a las llamadas al API
+5. API Gateway valida firma (JWKS), issuer y audience
+6. BFF (y cada MS con perfil azuread) vuelve a validar el JWT
+7. BFF orquesta carrito / checkout / notificaciones, etc.
 ```
 
-- **API Gateway**: valida el JWT con el authorizer JWT (JWKS del issuer) y comprueba audiencia.
-- **Backend y microservicios**: validan de forma independiente firma, issuer y audiencia del token.
-- **Rutas públicas**: solo `GET /api/public/health`, `GET /api/public/products`, `GET /api/public/products/{id}` y preflight CORS.
-- **Rutas protegidas**: cualquier otra ruta, incluyendo carrito, órdenes, notificaciones y `/api/me`.
+| Caso | HTTP esperado |
+|------|----------------|
+| `GET /api/public/products` sin token | **200** |
+| `GET /api/me` sin token | **401** |
+| Token basura | **401** |
+| Token MSAL válido | **200** |
+| `/api/admin/**` sin admin | **403** |
 
 ---
 
-## 5. Calidad / Validación
+## 9. Cumplimiento rúbrica EP2 (resumen)
 
-- Frontend: `npm run build` (dev) o `ng build` (prod).
-- Backend: `./mvnw.cmd test` (incluye test end-to-end con JWT HS256 local que arranca el contexto completo).
-- Terraform: `terraform fmt -check -recursive` y `terraform validate`.
+Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
+
+| Indicador | Evidencia en este repo / demo |
+|-----------|-------------------------------|
+| MSAL configurado | `frontend/src/app/auth/` + environments |
+| Login / logout real | Botón en la SPA desplegada |
+| `MsalGuard` / `MsalInterceptor` / `/auth` | Rutas privadas + Bearer en Network |
+| Scope propio | `access_as_user` |
+| BFF Resource Server | Perfil `azuread`, iss/aud/firma/exp |
+| 401 / 403 / 200 | Demostrable vía Gateway o BFF |
+| API Manager (Gateway) | Terraform aplicado: rutas + JWT + CORS |
+| FE + BE en cloud | sslip.io + execute-api |
 
 ---
 
-## 6. Hitos / Fases
+## 10. Calidad
 
-- [x] **Fase 1 — Scaffold y autorización**: Angular+MSAL, Spring Boot Resource Server, Terraform API Gateway. *(commit raíz del repo)*
-- [ ] **Fase 2 — Despliegue real**: `terraform apply` contra cuenta AWS con credenciales reales y endpoints de `developer`.
-- [ ] **Fase 3 — CI/CD**: GitHub Actions que corran test + build por rama (GitFlow: feature → develop → main).
+```bash
+# Frontend
+cd frontend && npm run build -- --configuration=production
+
+# Backend (desde cada módulo o con el wrapper del servicio)
+cd backend && ./mvnw test
+
+# Terraform
+cd terraform && terraform fmt -check -recursive && terraform validate
+```
 
 ---
 
-## 7. Licencia / Autor
+## 11. Hitos
 
-Proyecto académico — asignatura DESARROLLO_CLOUD_NATIVE_I_005D.
+- [x] Scaffold Angular + MSAL + BFF + 8 MS  
+- [x] Entra ID (login real, PKCE, claims, admin por lista)  
+- [x] Terraform API Gateway JWT + CORS  
+- [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
+- [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
+- [ ] CI/CD (GitHub Actions)  
+- [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
+
+---
+
+## 12. Equipo / licencia
+
+Proyecto académico — **DESARROLLO_CLOUD_NATIVE_I_005D**.  
+Repositorio: `GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D` · rama `main`.
