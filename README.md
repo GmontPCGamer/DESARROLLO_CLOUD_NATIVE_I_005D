@@ -17,7 +17,7 @@ Login contra el tenant Entra **NextTechDemo** (administrable en portal).
 
 | Qué | URL / valor |
 |-----|-------------|
-| **Frontend (HTTPS, demo)** | https://departments-intl-stick-homework.trycloudflare.com |
+| **Frontend (HTTPS, demo)** | https://armed-merchants-optimization-wider.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
 | EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
@@ -39,7 +39,7 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
 # Frontend (tunnel) → 200
-curl -sI "https://departments-intl-stick-homework.trycloudflare.com/" | head -n 1
+curl -sI "https://armed-merchants-optimization-wider.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -56,12 +56,10 @@ NexoTech es una tienda de hardware (celulares, notebooks, consolas, etc.) pensad
 
 ### Quién puede iniciar sesión
 
-- Usuarios del tenant **NextTechDemo** (`f2e0852e-…`), single-tenant.
-- La cuenta Duoc `fe.ardiles@duocuc.cl` está invitada/vinculada a ese tenant (login con autenticador).
-- **Administrador de la aplicación** (menú Administración / `/admin`): solo  
-  **`fe.ardiles@duocuc.cl`** vía `APP_ADMIN_USERS` → `ROLE_ADMIN` en el BFF.  
-  (No es Global Admin de Azure; es admin de negocio de NexoTech.)
-- Otras cuentas del mismo tenant entran como usuario normal (carrito, perfil, etc.).
+- Cualquier cuenta **`@duocuc.cl`** del tenant Duoc (login institucional).
+- La app está registrada en **NextTechDemo** (multi-tenant, visible en portal) y el **issuer** de los tokens es Duoc.
+- **Administrador de la aplicación** (menú Administración): solo **`fe.ardiles@duocuc.cl`**.
+- Primera vez: puede pedir **aceptar permisos** (consentimiento); hay que aceptar.
 
 ---
 
@@ -156,18 +154,19 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 |-----------|--------|
 | Tenant | `f2e0852e-19c3-4785-baa7-f24347e3ccea` (NextTechDemo) |
 | Client ID (SPA+API) | `b541332a-4305-4111-84f1-b5584ade7d44` |
-| Authority | `https://login.microsoftonline.com/f2e0852e-…` |
-| API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://departments-intl-stick-homework.trycloudflare.com/auth` |
-| Logout URI | `https://departments-intl-stick-homework.trycloudflare.com` |
+| Authority | `https://login.microsoftonline.com/72fd0b5a-…` (Duoc, para `@duocuc.cl`) |
+| API URI / scope | `api://b541332a-…/access_as_user` |
+| Redirect URI | `https://armed-merchants-optimization-wider.trycloudflare.com/auth` |
+| Logout URI | `https://armed-merchants-optimization-wider.trycloudflare.com` |
 
 Notas importantes:
 
 - Flujo **Authorization Code + PKCE** (sin client secret en Angular).
-- Tenant de demo administrable en portal (creado desde la cuenta Duoc); App registration **NexoTech Demo SPA** visible en Entra.
-- En Entra también pueden quedar redirects de `sslip.io` y `localhost` como respaldo.
-- API Gateway y BFF aceptan audiencia `b541332a-…` y `api://nexotech-demo-api`.
-- CORS del Gateway/BFF incluye el origen del tunnel Cloudflare.
+- App registration en tenant **NextTechDemo** (portal administrable) con audiencia **multi-tenant**.
+- El login usa authority **Duoc** para que cualquier `@duocuc.cl` pueda entrar; el JWT lleva `iss` de Duoc y `aud` de la app.
+- API Gateway valida issuer Duoc + audiencias de la app.
+- CORS incluye el origen del tunnel Cloudflare.
+- Admin de negocio: `APP_ADMIN_USERS=fe.ardiles@duocuc.cl`.
 
 Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexotech-student-api` si esa app tiene redirect `http://localhost:4200/auth`).
 
@@ -333,7 +332,7 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 ### 10.1 Antes de empezar (checklist)
 
 - [ ] Lab AWS Academy **activo** + `aws configure` vigente  
-- [ ] Abrir SPA: https://departments-intl-stick-homework.trycloudflare.com  
+- [ ] Abrir SPA: https://armed-merchants-optimization-wider.trycloudflare.com  
 - [ ] Portal Azure en directorio **NextTechDemo** (`f2e0852e-…`)  
 - [ ] Consola AWS región **us-east-1**  
 - [ ] Terminal con los curls 200/401 listos  

@@ -30,21 +30,21 @@ variable "cors_origenes" {
 }
 
 variable "issuer_uri" {
-  description = "Issuer del authorizer JWT (Azure AD / Entra ID v2)."
+  description = "Issuer JWT: tenant Duoc (usuarios @duocuc.cl). La app vive en NextTechDemo (multi-tenant)."
   type        = string
-  default     = "https://login.microsoftonline.com/f2e0852e-19c3-4785-baa7-f24347e3ccea/v2.0"
+  default     = "https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250/v2.0"
 }
 
 variable "audiencia" {
-  description = "Audiencia esperada en el token (clientId de NexoTech Demo SPA)."
+  description = "Audiencia (clientId de NexoTech Demo SPA en NextTechDemo)."
   type        = string
   default     = "b541332a-4305-4111-84f1-b5584ade7d44"
 }
 
 variable "azure_tenant_id" {
-  description = "Directory (tenant) ID de Microsoft Entra (NextTechDemo)."
+  description = "Tenant del issuer de los access tokens (Duoc). App registration en NextTechDemo."
   type        = string
-  default     = "f2e0852e-19c3-4785-baa7-f24347e3ccea"
+  default     = "72fd0b5a-8a6a-4cff-89f6-bde961f7e250"
 }
 
 variable "ec2_instance_type" {
