@@ -30,19 +30,19 @@ variable "cors_origenes" {
 }
 
 variable "issuer_uri" {
-  description = "Issuer JWT: tenant Duoc (usuarios @duocuc.cl). La app vive en NextTechDemo (multi-tenant)."
+  description = "Issuer JWT del tenant Duoc."
   type        = string
   default     = "https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250/v2.0"
 }
 
 variable "audiencia" {
-  description = "Audiencia (clientId de NexoTech Demo SPA en NextTechDemo)."
+  description = "Audiencia (clientId app NexoTech Demo SPA en tenant Duoc)."
   type        = string
-  default     = "b541332a-4305-4111-84f1-b5584ade7d44"
+  default     = "f7d7e5dd-430c-4adb-9348-9ecd974b220c"
 }
 
 variable "azure_tenant_id" {
-  description = "Tenant del issuer de los access tokens (Duoc). App registration en NextTechDemo."
+  description = "Directory (tenant) ID Duoc — login sin admin consent externo."
   type        = string
   default     = "72fd0b5a-8a6a-4cff-89f6-bde961f7e250"
 }

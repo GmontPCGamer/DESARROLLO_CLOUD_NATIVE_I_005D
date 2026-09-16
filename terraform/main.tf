@@ -32,7 +32,7 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
     audience = [
       var.audiencia,
       "api://nexotech-demo-api",
-      "api://b541332a-4305-4111-84f1-b5584ade7d44",
+      "api://f7d7e5dd-430c-4adb-9348-9ecd974b220c",
     ]
   }
 }

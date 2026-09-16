@@ -13,17 +13,17 @@ Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PR
 ## Estado actual (septiembre 2026)
 
 La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h).  
-Login contra el tenant Entra **NextTechDemo** (administrable en portal).
+Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval required”).
 
 | Qué | URL / valor |
 |-----|-------------|
-| **Frontend (HTTPS, demo)** | https://armed-merchants-optimization-wider.trycloudflare.com |
+| **Frontend (HTTPS, demo)** | https://discharge-alexander-sig-homeland.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
 | EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
 | **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
-| Tenant Entra | `f2e0852e-19c3-4785-baa7-f24347e3ccea` (NextTechDemo) |
-| App registration | **NexoTech Demo SPA** · client ID `b541332a-4305-4111-84f1-b5584ade7d44` |
+| Tenant Entra | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
+| App registration | **NexoTech Demo SPA** · client ID `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
 
 > **URL pública a usar:** el tunnel de Cloudflare. En redes con filtro (p. ej. Duoc) `*.sslip.io` responde *Web Filter Violation* (403). El tunnel apunta a nginx en la EC2.
 >
@@ -39,7 +39,7 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
 # Frontend (tunnel) → 200
-curl -sI "https://armed-merchants-optimization-wider.trycloudflare.com/" | head -n 1
+curl -sI "https://discharge-alexander-sig-homeland.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -57,9 +57,9 @@ NexoTech es una tienda de hardware (celulares, notebooks, consolas, etc.) pensad
 ### Quién puede iniciar sesión
 
 - Cualquier cuenta **`@duocuc.cl`** del tenant Duoc (login institucional).
-- La app está registrada en **NextTechDemo** (multi-tenant, visible en portal) y el **issuer** de los tokens es Duoc.
+- La app está registrada **en el tenant Duoc** (single-tenant) para login rápido, sin pedir aprobación de admin.
 - **Administrador de la aplicación** (menú Administración): solo **`fe.ardiles@duocuc.cl`**.
-- Primera vez: puede pedir **aceptar permisos** (consentimiento); hay que aceptar.
+- Primera vez: puede pedir **aceptar permisos** (consentimiento de usuario); hay que aceptar.
 
 ---
 
@@ -77,7 +77,7 @@ Usuario
                │ login
                ▼
 ┌─────────────────────────────────────┐
-│  Microsoft Entra ID (NextTechDemo)  │
+│  Microsoft Entra ID (Duoc)          │
 │  App: NexoTech Demo SPA             │
 │  Scope: api://nexotech-demo-api/    │
 │         access_as_user              │
@@ -152,19 +152,18 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 
 | Parámetro | Valor |
 |-----------|--------|
-| Tenant | `f2e0852e-19c3-4785-baa7-f24347e3ccea` (NextTechDemo) |
-| Client ID (SPA+API) | `b541332a-4305-4111-84f1-b5584ade7d44` |
-| Authority | `https://login.microsoftonline.com/72fd0b5a-…` (Duoc, para `@duocuc.cl`) |
-| API URI / scope | `api://b541332a-…/access_as_user` |
-| Redirect URI | `https://armed-merchants-optimization-wider.trycloudflare.com/auth` |
-| Logout URI | `https://armed-merchants-optimization-wider.trycloudflare.com` |
+| Tenant | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
+| Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
+| Authority | `https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
+| API URI / scope | `api://nexotech-demo-api/access_as_user` |
+| Redirect URI | `https://discharge-alexander-sig-homeland.trycloudflare.com/auth` |
+| Logout URI | `https://discharge-alexander-sig-homeland.trycloudflare.com` |
 
 Notas importantes:
 
 - Flujo **Authorization Code + PKCE** (sin client secret en Angular).
-- App registration en tenant **NextTechDemo** (portal administrable) con audiencia **multi-tenant**.
-- El login usa authority **Duoc** para que cualquier `@duocuc.cl` pueda entrar; el JWT lleva `iss` de Duoc y `aud` de la app.
-- API Gateway valida issuer Duoc + audiencias de la app.
+- App registration en tenant **Duoc** (single-tenant) → evita “Approval required” de apps multi-tenant unverified.
+- API Gateway valida issuer Duoc + audiencias `f7d7e5dd-…` / `api://nexotech-demo-api`.
 - CORS incluye el origen del tunnel Cloudflare.
 - Admin de negocio: `APP_ADMIN_USERS=fe.ardiles@duocuc.cl`.
 
@@ -219,8 +218,8 @@ Variables típicas para `azuread` (no commitear secretos):
 
 ```bash
 export SPRING_PROFILES_ACTIVE=azuread
-export AZURE_TENANT_ID=f2e0852e-19c3-4785-baa7-f24347e3ccea
-export AZURE_API_AUDIENCE=b541332a-4305-4111-84f1-b5584ade7d44,api://nexotech-demo-api
+export AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
+export AZURE_API_AUDIENCE=f7d7e5dd-430c-4adb-9348-9ecd974b220c,api://nexotech-demo-api
 export APP_ADMIN_USERS=fe.ardiles@duocuc.cl
 export APP_CORS_ORIGINS=http://localhost:4200
 ```
@@ -332,21 +331,21 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 ### 10.1 Antes de empezar (checklist)
 
 - [ ] Lab AWS Academy **activo** + `aws configure` vigente  
-- [ ] Abrir SPA: https://armed-merchants-optimization-wider.trycloudflare.com  
-- [ ] Portal Azure en directorio **NextTechDemo** (`f2e0852e-…`)  
+- [ ] Abrir SPA: https://discharge-alexander-sig-homeland.trycloudflare.com  
+- [ ] Portal Azure en directorio **Duoc UC** (`72fd0b5a-…`)  
 - [ ] Consola AWS región **us-east-1**  
 - [ ] Terminal con los curls 200/401 listos  
 - [ ] Login de prueba: **`fe.ardiles@duocuc.cl`** (admin de la app)
 
 ### 10.2 Dónde está cada cosa en Azure (Entra)
 
-1. https://portal.azure.com → avatar → **Switch directory** → **NextTechDemo**.  
+1. https://portal.azure.com → avatar → **Switch directory** → **Duoc UC** (o el directorio institucional).  
 2. Busca **Microsoft Entra ID**.
 
 | Pantalla | Qué mostrar | Qué decir |
 |----------|-------------|-----------|
-| **Overview** | Tenant ID `f2e0852e-…` | “Directorio dedicado al proyecto” |
-| **App registrations** → **NexoTech Demo SPA** | Client ID `b541332a-…` | “Registro de la SPA + API” |
+| **Overview** | Tenant ID `72fd0b5a-…` | “Directorio Duoc: usuarios `@duocuc.cl`” |
+| **App registrations** → **NexoTech Demo SPA** | Client ID `f7d7e5dd-…` | “Registro de la SPA + API (single-tenant)” |
 | **Authentication** | Redirect `…trycloudflare.com/auth` | “SPA + PKCE, sin client secret” |
 | **Expose an API** | URI `api://nexotech-demo-api`, scope `access_as_user` | “Scope que pide MSAL” |
 | **API permissions** | Permiso delegado al scope | “La app pide acceso a su propia API” |
@@ -361,7 +360,7 @@ Consola: región **N. Virginia (us-east-1)**.
 |----------|-----------------|-------------|
 | **API Gateway** (= API Manager) | API Gateway → HTTP APIs → `nexotech-005d-api` (`ourd5f7qr1`) | Rutas, authorizer, CORS, stage `dev` |
 | **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
-| **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant NextTechDemo; audiences = clientId + `api://nexotech-demo-api` |
+| **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
 | **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
 | **EC2** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
 | **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la demo |
@@ -417,7 +416,7 @@ cd terraform && terraform fmt -check -recursive && terraform validate
 - [x] Terraform API Gateway JWT + CORS  
 - [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
 - [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
-- [x] Tenant Entra propio (NextTechDemo) visible en portal  
+- [x] App Entra en tenant Duoc (login rápido sin admin approval)  
 - [ ] CI/CD (GitHub Actions)  
 - [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
 
