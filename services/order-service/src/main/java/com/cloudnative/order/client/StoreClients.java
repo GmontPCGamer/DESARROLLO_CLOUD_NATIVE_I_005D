@@ -32,18 +32,15 @@ public class StoreClients {
 
   private final RestClient catalog;
   private final RestClient cart;
-  private final RestClient notifications;
   private final RestClient inventory;
 
   public StoreClients(
       RestClient.Builder builder,
       @Value("${app.services.catalog}") String catalogUrl,
       @Value("${app.services.cart}") String cartUrl,
-      @Value("${app.services.notifications}") String notificationsUrl,
       @Value("${app.services.inventory}") String inventoryUrl) {
     this.catalog = builder.clone().baseUrl(catalogUrl).build();
     this.cart = builder.clone().baseUrl(cartUrl).build();
-    this.notifications = builder.clone().baseUrl(notificationsUrl).build();
     this.inventory = builder.clone().baseUrl(inventoryUrl).build();
   }
 
@@ -124,18 +121,6 @@ public class StoreClients {
         .toBodilessEntity());
   }
 
-  // ---- Notificaciones -----------------------------------------------------
-
-  public void notify(String token, String title, String message) {
-    compensate("Notificaciones", () -> notifications.post()
-        .uri("/api/notifications")
-        .headers(h -> h.setBearerAuth(token))
-        .contentType(MediaType.APPLICATION_JSON)
-        .body(new CreateNotification(title, message, "ORDER"))
-        .retrieve()
-        .toBodilessEntity());
-  }
-
   // ---- Utilidades ---------------------------------------------------------
 
   /**
@@ -197,9 +182,6 @@ public class StoreClients {
   }
 
   public record CartDto(String userId, List<CartItemDto> items, int totalItems) {
-  }
-
-  public record CreateNotification(String title, String message, String type) {
   }
 
   public record QuantityRequest(int quantity) {

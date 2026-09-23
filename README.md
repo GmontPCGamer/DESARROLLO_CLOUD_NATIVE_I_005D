@@ -119,6 +119,7 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
 | BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
 | Microservicios | Spring Boot 4 (8 servicios) | `services/*-service/` |
+| Mensajería | RabbitMQ (Spring AMQP). Local: Docker. AWS: Amazon MQ | `docker-compose.yml` |
 | Infra | Terraform (API GW + EC2 + EIP + SG) | `terraform/` |
 | Deploy | Scripts bash (local + EC2) | `scripts/` |
 
@@ -200,9 +201,23 @@ terraform output
 
 - Node.js ≥ 22, npm  
 - Java 17, Maven Wrapper (`./mvnw` / `./mvnw.cmd`)  
+- Docker (RabbitMQ local)  
 - (Opcional) Terraform ≥ 1.6, AWS CLI, cuenta AWS Academy  
 
 ### 6.1 Backend + microservicios
+
+RabbitMQ tiene que estar arriba antes del checkout. `scripts/start-all.sh` lo levanta con Docker si el puerto 5672 está libre.
+
+```bash
+docker compose up -d rabbitmq
+# consola: http://localhost:15672  (guest / guest)
+# exchange: nexotech.events
+# colas: nexotech.notifications, nexotech.shipments, nexotech.payments
+```
+
+Al confirmar una compra, `order-service` publica `order.placed`. De ese evento salen tres acciones: el aviso al usuario, el despacho (`shipment.created`) y la captura del pago. Publicar una reseña encola `review.created`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla. En AWS el broker pasa a Amazon MQ con `SPRING_RABBITMQ_HOST`, `PORT`, `USERNAME` y `PASSWORD`.
+
+### 6.2 Servicios Spring
 
 ```bash
 # Perfil local (JWT HS256 de desarrollo, sin Entra)
@@ -231,7 +246,7 @@ curl http://localhost:8080/api/public/products
 curl -i http://localhost:8080/api/me          # → 401 sin token
 ```
 
-### 6.2 Frontend
+### 6.3 Frontend
 
 ```bash
 cd frontend
@@ -241,7 +256,7 @@ npm start    # http://localhost:4200
 
 Ajusta `frontend/src/environments/environment.development.ts` si cambias clientId / scope / redirects.
 
-### 6.3 Build de producción (SPA)
+### 6.4 Build de producción (SPA)
 
 ```bash
 cd frontend

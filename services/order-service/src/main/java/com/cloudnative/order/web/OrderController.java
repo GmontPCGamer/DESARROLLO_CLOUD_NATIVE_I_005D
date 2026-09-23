@@ -24,6 +24,8 @@ import com.cloudnative.order.client.StoreClients.CartDto;
 import com.cloudnative.order.client.StoreClients.CartItemDto;
 import com.cloudnative.order.client.StoreClients.ProductDto;
 import com.cloudnative.order.domain.CustomerOrder;
+import com.cloudnative.order.messaging.OrderEventPublisher;
+import com.cloudnative.order.messaging.OrderPlacedMessage;
 import com.cloudnative.order.domain.OrderLine;
 import com.cloudnative.order.repo.CustomerOrderRepository;
 
@@ -33,10 +35,12 @@ public class OrderController {
 
   private final CustomerOrderRepository orders;
   private final StoreClients clients;
+  private final OrderEventPublisher events;
 
-  public OrderController(CustomerOrderRepository orders, StoreClients clients) {
+  public OrderController(CustomerOrderRepository orders, StoreClients clients, OrderEventPublisher events) {
     this.orders = orders;
     this.clients = clients;
+    this.events = events;
   }
 
   @GetMapping("/public/health")
@@ -64,7 +68,7 @@ public class OrderController {
    * 2. Consulta precio y nombre actual de cada producto.
    * 3. Reserva stock en inventario y descuenta el catálogo (con compensación si algo falla).
    * 4. Persiste la orden con despacho y pago ya autorizados por el BFF.
-   * 5. Vacía el carrito y genera una notificación.
+   * 5. Vacía el carrito y publica el aviso en RabbitMQ (lo consume notification-service).
    */
   @PostMapping("/orders")
   public OrderResponse checkout(
@@ -119,7 +123,17 @@ public class OrderController {
     CustomerOrder saved = orders.save(order);
 
     clients.clearCart(token);
-    clients.notify(token, "Compra confirmada", notificationMessage(saved));
+    OrderPlacedMessage event = new OrderPlacedMessage(
+        jwt.getSubject(),
+        saved.getId(),
+        "Compra confirmada",
+        notificationMessage(saved),
+        "ORDER");
+    event.setPaymentId(saved.getPaymentId());
+    event.setShippingService(saved.getShippingService());
+    event.setShippingRegion(saved.getShippingRegion());
+    event.setShippingCommune(saved.getShippingCommune());
+    events.publishOrderNotification(event);
 
     return toResponse(saved);
   }

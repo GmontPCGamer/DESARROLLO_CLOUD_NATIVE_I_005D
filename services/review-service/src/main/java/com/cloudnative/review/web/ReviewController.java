@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.cloudnative.review.messaging.ReviewEventPublisher;
+
 /**
  * Reseñas de productos. La lectura es pública; publicar requiere sesión.
  * Reglas: rating 1..5, comentario obligatorio (máx. 500 caracteres) y una sola
@@ -31,8 +33,10 @@ public class ReviewController {
 
   private final AtomicLong sequence = new AtomicLong();
   private final List<StoredReview> reviews = new CopyOnWriteArrayList<>();
+  private final ReviewEventPublisher events;
 
-  public ReviewController() {
+  public ReviewController(ReviewEventPublisher events) {
+    this.events = events;
     seed(1L, "seed-camila", "Camila R.", 5, "La batería y la cámara superaron mis expectativas.", 40);
     seed(1L, "seed-diego", "Diego M.", 4, "Buen equipo, llegó rápido y bien protegido.", 25);
     seed(2L, "seed-valentina", "Valentina P.", 5, "El S Pen y el zoom son otro nivel. Muy contenta.", 30);
@@ -85,6 +89,7 @@ public class ReviewController {
         request.comment().trim(),
         Instant.now());
     reviews.add(new StoredReview(userId, review));
+    events.published(userId, productId, request.rating());
     return review;
   }
 

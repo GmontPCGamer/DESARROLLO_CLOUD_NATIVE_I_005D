@@ -12,6 +12,9 @@
 #   APP_ADMIN_USERS     correos (preferred_username) que reciben ROLE_ADMIN, separados por coma
 #
 # Logs:  .run/logs/<servicio>.log     PIDs: .run/pids/<servicio>.pid
+#
+# RabbitMQ (avisos de compra): docker compose up -d rabbitmq
+#   consola http://localhost:15672  guest / guest
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -37,6 +40,19 @@ detach() {
 }
 
 export SPRING_PROFILES_ACTIVE="$PROFILE"
+export SPRING_RABBITMQ_HOST="${SPRING_RABBITMQ_HOST:-localhost}"
+export SPRING_RABBITMQ_PORT="${SPRING_RABBITMQ_PORT:-5672}"
+export SPRING_RABBITMQ_USERNAME="${SPRING_RABBITMQ_USERNAME:-guest}"
+export SPRING_RABBITMQ_PASSWORD="${SPRING_RABBITMQ_PASSWORD:-guest}"
+
+if ! lsof -iTCP:5672 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+  if command -v docker >/dev/null 2>&1; then
+    echo "Levantando RabbitMQ…"
+    docker compose -f "$ROOT/docker-compose.yml" up -d rabbitmq || echo "Aviso: no se pudo iniciar RabbitMQ"
+  else
+    echo "Aviso: RabbitMQ no está en localhost:5672. Los avisos de compra no se encolarán."
+  fi
+fi
 if [[ "$PROFILE" == "azuread" ]]; then
   export AZURE_TENANT_ID="${AZURE_TENANT_ID:-72fd0b5a-8a6a-4cff-89f6-bde961f7e250}"
   export AZURE_API_AUDIENCE="${AZURE_API_AUDIENCE:-097bfd84-a8e3-4232-9048-718f4d648efd}"

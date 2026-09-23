@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.cloudnative.shipping.messaging.ShipmentBook;
+
 /**
  * Cotizador de despacho simulado. Reglas:
  * - Región Metropolitana: EXPRESS, $4.990, 1 a 2 días hábiles.
@@ -29,6 +31,12 @@ public class ShippingController {
   static final BigDecimal FREE_SHIPPING_FROM = new BigDecimal("500000");
   static final BigDecimal EXPRESS_PRICE = new BigDecimal("4990");
   static final BigDecimal STANDARD_PRICE = new BigDecimal("7990");
+
+  private final ShipmentBook shipments;
+
+  public ShippingController(ShipmentBook shipments) {
+    this.shipments = shipments;
+  }
 
   @GetMapping("/public/health")
   public Map<String, String> health() {
@@ -66,6 +74,10 @@ public class ShippingController {
 
   @GetMapping("/shipping/{trackingId}")
   public Tracking tracking(@PathVariable String trackingId, @AuthenticationPrincipal Jwt jwt) {
+    ShipmentBook.Shipment shipment = shipments.find(trackingId);
+    if (shipment != null && jwt.getSubject().equals(shipment.userId())) {
+      return new Tracking(shipment.trackingId(), shipment.status(), shipment.message(), shipment.updatedAt());
+    }
     return new Tracking(trackingId, "PREPARANDO", "Tu pedido está siendo preparado", Instant.now());
   }
 
