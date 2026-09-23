@@ -6,6 +6,8 @@ Flujo real en producción (demo):
 
 **Angular + MSAL** → **Microsoft Entra ID** → **AWS API Gateway (JWT Authorizer)** → **BFF Spring Boot** → **8 microservicios**
 
+Tras confirmar una compra, `order-service` publica en **RabbitMQ**. Avisos, despacho y captura del pago salen de esa cola, no de una llamada HTTP.
+
 Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md) · Guión de presentación: [GUIÓN_PRESENTACIÓN_EP2.md](GUIÓN_PRESENTACIÓN_EP2.md) · Entra: [MICROSOFT_ENTRA_CONFIG.md](MICROSOFT_ENTRA_CONFIG.md)
 
 ---
@@ -20,7 +22,9 @@ Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval require
 | **Frontend (HTTPS, demo)** | https://discharge-alexander-sig-homeland.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 / nginx (origen) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
+| EC2 aplicación (BFF + 8 MS + nginx) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
+| **EC2 RabbitMQ** | `i-0f8aae5246e5e7513` · consola http://52.207.19.62:15672 |
+| Usuario del broker | `nexotech` (clave: `terraform output -raw rabbitmq_password`) |
 | **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
 | Tenant Entra | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
 | App registration | **NexoTech Demo SPA** · client ID `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
@@ -93,15 +97,22 @@ Usuario
                │ proxy HTTP
                ▼
 ┌─────────────────────────────────────┐
-│  EC2 — BFF Spring Boot :8080        │
+│  EC2 app — BFF Spring Boot :8080    │
 │  OAuth2 Resource Server (azuread)   │
 └──────────────┬──────────────────────┘
-               │
+               │ HTTP
      ┌─────────┼─────────┬──────────┐
      ▼         ▼         ▼          ▼
   :8081     :8082     :8083 …    :8088
  catálogo   carrito   órdenes    reseñas
             …inventario, pago, despacho, avisos
+
+  order-service  --order.placed-->  EC2 RabbitMQ (nexotech.events)
+  review-service --review.created-->     │
+                                         ├─ nexotech.notifications  → aviso al usuario
+                                         ├─ nexotech.shipments      → seguimiento NX{id}
+                                         └─ nexotech.payments       → pago AUTHORIZED → CAPTURED
+                                    shipment.created vuelve a la cola de avisos
 ```
 
 ### Por qué el frontend está en la EC2 (+ tunnel)
@@ -119,8 +130,8 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
 | BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
 | Microservicios | Spring Boot 4 (8 servicios) | `services/*-service/` |
-| Mensajería | RabbitMQ (Spring AMQP). Local: Docker. AWS: Amazon MQ | `docker-compose.yml` |
-| Infra | Terraform (API GW + EC2 + EIP + SG) | `terraform/` |
+| Mensajería | RabbitMQ 4.2 + Spring AMQP. Local: Docker. Nube: EC2 propia | `docker-compose.yml`, `terraform/rabbitmq.tf` |
+| Infra | Terraform (API GW + 2 EC2 + EIP + SG) | `terraform/` |
 | Deploy | Scripts bash (local + EC2) | `scripts/` |
 
 | Servicio | Puerto | Responsabilidad |
@@ -128,12 +139,12 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | `backend` (BFF) | 8080 | Agregación, authz, `/api/me`, admin |
 | `catalog-service` | 8081 | Productos y stock base |
 | `cart-service` | 8082 | Carrito por usuario |
-| `order-service` | 8083 | Checkout y compras |
-| `notification-service` | 8084 | Avisos |
-| `inventory-service` | 8085 | Reservas de inventario |
-| `payment-service` | 8086 | Pago simulado |
-| `shipping-service` | 8087 | Cotización / despacho |
-| `review-service` | 8088 | Reseñas |
+| `order-service` | 8083 | Checkout. Reserva stock por HTTP y publica `order.placed` |
+| `notification-service` | 8084 | Avisos. Consume `order.placed`, `review.created` y `shipment.created` |
+| `inventory-service` | 8085 | Reservas de inventario (HTTP, síncrono) |
+| `payment-service` | 8086 | Autoriza el pago por HTTP y lo captura al consumir `order.placed` |
+| `shipping-service` | 8087 | Cotiza por HTTP. Al consumir `order.placed` crea el seguimiento y publica `shipment.created` |
+| `review-service` | 8088 | Reseñas. Al publicar una, encola `review.created` |
 
 Rutas Angular relevantes:
 
@@ -182,8 +193,9 @@ Definido en Terraform (`terraform/`):
    - `GET /api/public/{proxy+}` → sin JWT (catálogo anónimo).
    - `OPTIONS /{proxy+}` → sin JWT (preflight CORS).
    - `ANY /{proxy+}` → JWT obligatorio.
-4. **EC2** `t3.medium` + Elastic IP + security group (22/80/443/8080).
-5. User-data / scripts instalan Java; jars y SPA se publican vía scripts / SSM.
+4. **EC2 de aplicación** `t3.medium` + Elastic IP + security group (22/80/443/8080). Ahí corren el BFF, los 8 microservicios y nginx.
+5. **EC2 de RabbitMQ** `t3.small` (`terraform/rabbitmq.tf`). AMQP `5672` solo acepta tráfico desde la EC2 de la aplicación. La consola `15672` es la de la demo. User-data instala Docker y levanta `rabbitmq:4.2-management` con el usuario `nexotech`.
+6. Los jars se publican por S3 + SSM. Los servicios que usan la cola leen `SPRING_RABBITMQ_HOST` (IP privada del broker), `PORT`, `USERNAME` y `PASSWORD`.
 
 Outputs útiles:
 
@@ -215,7 +227,9 @@ docker compose up -d rabbitmq
 # colas: nexotech.notifications, nexotech.shipments, nexotech.payments
 ```
 
-Al confirmar una compra, `order-service` publica `order.placed`. De ese evento salen tres acciones: el aviso al usuario, el despacho (`shipment.created`) y la captura del pago. Publicar una reseña encola `review.created`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla. En AWS el broker pasa a Amazon MQ con `SPRING_RABBITMQ_HOST`, `PORT`, `USERNAME` y `PASSWORD`.
+Al confirmar una compra, `order-service` publica `order.placed` en el exchange `nexotech.events`. De ese evento salen tres acciones: el aviso al usuario, el despacho (`shipment.created`, seguimiento `NX{id}`) y la captura del pago (`AUTHORIZED` → `CAPTURED`). Publicar una reseña encola `review.created`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla.
+
+En la nube el broker es la EC2 de RabbitMQ. En local Docker usa `guest` / `guest`.
 
 ### 6.2 Servicios Spring
 
@@ -377,11 +391,12 @@ Consola: región **N. Virginia (us-east-1)**.
 | **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
 | **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
 | **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
-| **EC2** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
-| **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la demo |
-| **Security Group** | de la instancia | Puertos 80, 443, 8080, 22 |
+| **EC2 aplicación** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
+| **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Broker. Consola http://52.207.19.62:15672 |
+| **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la aplicación |
+| **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672 solo desde la app, 15672 público |
 | **S3** (opcional) | bucket `nexotech-jars-7717` | jars y zip de la SPA |
-| **Terraform** (repo) | `terraform/main.tf`, `ec2.tf` | “Infra como código” |
+| **Terraform** (repo) | `terraform/main.tf`, `ec2.tf`, `rabbitmq.tf` | “Infra como código” |
 
 Curls en vivo (API Manager):
 
@@ -431,7 +446,8 @@ cd terraform && terraform fmt -check -recursive && terraform validate
 - [x] Terraform API Gateway JWT + CORS  
 - [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
 - [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
-- [x] App Entra en tenant Duoc (login rápido sin admin approval)  
+- [x] App Entra en tenant Duoc (login rápido sin admin approval)
+- [x] RabbitMQ en EC2: compra, despacho, captura de pago y reseña  
 - [ ] CI/CD (GitHub Actions)  
 - [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
 
