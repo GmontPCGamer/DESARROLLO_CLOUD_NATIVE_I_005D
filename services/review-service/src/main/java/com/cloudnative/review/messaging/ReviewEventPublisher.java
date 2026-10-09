@@ -23,7 +23,8 @@ public class ReviewEventPublisher {
         "Quedó registrada tu reseña de " + rating + " estrellas para el producto #" + productId + ".",
         "REVIEW");
     try {
-      rabbitTemplate.convertAndSend(RabbitConfig.EXCHANGE, RabbitConfig.REVIEW_CREATED, notice);
+      rabbitTemplate.convertAndSend(
+          RabbitConfig.NOTIFICATIONS_EXCHANGE, RabbitConfig.NOTIFICATIONS_ROUTING_KEY, notice);
       log.info("Reseña publicada encolada productId={} userId={}", productId, userId);
     } catch (RuntimeException ex) {
       log.warn("La reseña se guardó, pero no se publicó el aviso: {}", ex.getMessage());

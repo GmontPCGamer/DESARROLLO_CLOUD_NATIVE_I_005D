@@ -2,8 +2,11 @@ package com.cloudnative.review.messaging;
 
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.support.converter.JacksonJavaTypeMapper;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -12,22 +15,50 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
-  public static final String EXCHANGE = "nexotech.events";
-  public static final String REVIEW_CREATED = "review.created";
+  public static final String NOTIFICATIONS_EXCHANGE = "nexotech.notifications.exchange";
+  public static final String NOTIFICATIONS_ROUTING_KEY = "notification.user";
+  public static final String NOTIFICATIONS = "nexotech.notifications";
+  public static final String NOTIFICATIONS_DLX = "nexotech.notifications.dlx";
+  public static final String NOTIFICATIONS_DLQ = "nexotech.notifications.dlq";
 
   @Bean
-  public TopicExchange eventsExchange() {
-    return new TopicExchange(EXCHANGE, true, false);
+  public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+    RabbitAdmin admin = new RabbitAdmin(connectionFactory);
+    admin.setAutoStartup(true);
+    return admin;
+  }
+
+  @Bean
+  public DirectExchange notificationsExchange() {
+    return new DirectExchange(NOTIFICATIONS_EXCHANGE, true, false);
+  }
+
+  @Bean
+  public DirectExchange notificationsDlx() {
+    return new DirectExchange(NOTIFICATIONS_DLX, true, false);
   }
 
   @Bean
   public Queue notificationsQueue() {
-    return new Queue("nexotech.notifications", true);
+    return QueueBuilder.durable(NOTIFICATIONS)
+        .deadLetterExchange(NOTIFICATIONS_DLX)
+        .deadLetterRoutingKey(NOTIFICATIONS_DLQ)
+        .build();
   }
 
   @Bean
-  public Binding reviewToNotifications(Queue notificationsQueue, TopicExchange eventsExchange) {
-    return BindingBuilder.bind(notificationsQueue).to(eventsExchange).with(REVIEW_CREATED);
+  public Queue notificationsDlq() {
+    return QueueBuilder.durable(NOTIFICATIONS_DLQ).build();
+  }
+
+  @Bean
+  public Binding notificationsBinding(Queue notificationsQueue, DirectExchange notificationsExchange) {
+    return BindingBuilder.bind(notificationsQueue).to(notificationsExchange).with(NOTIFICATIONS_ROUTING_KEY);
+  }
+
+  @Bean
+  public Binding notificationsDlqBinding(Queue notificationsDlq, DirectExchange notificationsDlx) {
+    return BindingBuilder.bind(notificationsDlq).to(notificationsDlx).with(NOTIFICATIONS_DLQ);
   }
 
   @Bean

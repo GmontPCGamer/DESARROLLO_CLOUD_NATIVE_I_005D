@@ -17,15 +17,20 @@ public class OrderEventPublisher {
   }
 
   /**
-   * Publica el aviso de compra. Si el broker no responde, la orden ya quedó
-   * confirmada: el fallo solo se registra.
+   * Publica la compra en las tres colas. Si el broker no responde, la orden
+   * ya quedó confirmada: el fallo solo se registra.
    */
   public void publishOrderNotification(OrderPlacedMessage event) {
     try {
-      rabbitTemplate.convertAndSend(RabbitConfig.EXCHANGE, RabbitConfig.ORDER_PLACED, event);
-      log.info("Compra publicada orderId={} userId={}", event.getOrderId(), event.getUserId());
+      rabbitTemplate.convertAndSend(
+          RabbitConfig.NOTIFICATIONS_EXCHANGE, RabbitConfig.NOTIFICATIONS_ROUTING_KEY, event);
+      rabbitTemplate.convertAndSend(
+          RabbitConfig.SHIPMENTS_EXCHANGE, RabbitConfig.SHIPMENTS_ROUTING_KEY, event);
+      rabbitTemplate.convertAndSend(
+          RabbitConfig.PAYMENTS_EXCHANGE, RabbitConfig.PAYMENTS_ROUTING_KEY, event);
+      log.info("Compra publicada en 3 colas orderId={} userId={}", event.getOrderId(), event.getUserId());
     } catch (RuntimeException ex) {
-      log.warn("No se pudo publicar el aviso de la orden {}: {}", event.getOrderId(), ex.getMessage());
+      log.warn("No se pudo publicar la orden {}: {}", event.getOrderId(), ex.getMessage());
     }
   }
 }

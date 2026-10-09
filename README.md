@@ -12,18 +12,18 @@ Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PR
 
 ---
 
-## Estado actual (septiembre 2026)
+## Estado actual (9 de octubre de 2026)
 
 La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h).  
 Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval required”).
 
 | Qué | URL / valor |
 |-----|-------------|
-| **Frontend (HTTPS, demo)** | https://discharge-alexander-sig-homeland.trycloudflare.com |
+| **Frontend (HTTPS, demo)** | https://attended-sought-banner-considered.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
 | EC2 aplicación (BFF + 8 MS + nginx) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
-| **EC2 RabbitMQ** | `i-0f8aae5246e5e7513` · consola http://52.207.19.62:15672 |
+| **EC2 RabbitMQ (cluster 2 nodos)** | `i-0f8aae5246e5e7513` · consolas http://35.174.107.237:15672 y :15673 |
 | Usuario del broker | `nexotech` (clave: `terraform output -raw rabbitmq_password`) |
 | **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
 | Tenant Entra | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
@@ -43,7 +43,7 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
 # Frontend (tunnel) → 200
-curl -sI "https://discharge-alexander-sig-homeland.trycloudflare.com/" | head -n 1
+curl -sI "https://attended-sought-banner-considered.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -107,12 +107,11 @@ Usuario
  catálogo   carrito   órdenes    reseñas
             …inventario, pago, despacho, avisos
 
-  order-service  --order.placed-->  EC2 RabbitMQ (nexotech.events)
-  review-service --review.created-->     │
-                                         ├─ nexotech.notifications  → aviso al usuario
-                                         ├─ nexotech.shipments      → seguimiento NX{id}
-                                         └─ nexotech.payments       → pago AUTHORIZED → CAPTURED
-                                    shipment.created vuelve a la cola de avisos
+  order-service publica en 3 exchanges (cada cola tiene DLX + DLQ):
+    notification.user  → nexotech.notifications
+    shipment.create    → nexotech.shipments      → seguimiento NX{id}
+    payment.capture    → nexotech.payments       → AUTHORIZED → CAPTURED
+  review y shipping republican el aviso en notification.user
 ```
 
 ### Por qué el frontend está en la EC2 (+ tunnel)
@@ -130,7 +129,7 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
 | BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
 | Microservicios | Spring Boot 4 (8 servicios) | `services/*-service/` |
-| Mensajería | RabbitMQ 4.2 + Spring AMQP. Local: Docker. Nube: EC2 propia | `docker-compose.yml`, `terraform/rabbitmq.tf` |
+| Mensajería | RabbitMQ 4.2 en cluster de 2 nodos + Spring AMQP (`RabbitAdmin`, listener container, DLX/DLQ) | `rabbitmq/docker-compose.yml`, `terraform/rabbitmq.tf` |
 | Infra | Terraform (API GW + 2 EC2 + EIP + SG) | `terraform/` |
 | Deploy | Scripts bash (local + EC2) | `scripts/` |
 
@@ -139,12 +138,12 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | `backend` (BFF) | 8080 | Agregación, authz, `/api/me`, admin |
 | `catalog-service` | 8081 | Productos y stock base |
 | `cart-service` | 8082 | Carrito por usuario |
-| `order-service` | 8083 | Checkout. Reserva stock por HTTP y publica `order.placed` |
-| `notification-service` | 8084 | Avisos. Consume `order.placed`, `review.created` y `shipment.created` |
+| `order-service` | 8083 | Checkout. Reserva stock por HTTP y publica en los 3 exchanges |
+| `notification-service` | 8084 | Avisos. Consume `nexotech.notifications` (`notification.user`) |
 | `inventory-service` | 8085 | Reservas de inventario (HTTP, síncrono) |
-| `payment-service` | 8086 | Autoriza el pago por HTTP y lo captura al consumir `order.placed` |
-| `shipping-service` | 8087 | Cotiza por HTTP. Al consumir `order.placed` crea el seguimiento y publica `shipment.created` |
-| `review-service` | 8088 | Reseñas. Al publicar una, encola `review.created` |
+| `payment-service` | 8086 | Autoriza el pago por HTTP y lo captura al consumir `payment.capture` |
+| `shipping-service` | 8087 | Cotiza por HTTP. Al consumir `shipment.create` crea `NX{id}` y republica el aviso |
+| `review-service` | 8088 | Reseñas. Al publicar una, envía el aviso por `notification.user` |
 
 Rutas Angular relevantes:
 
@@ -168,8 +167,8 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 | Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
 | Authority | `https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
 | API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://discharge-alexander-sig-homeland.trycloudflare.com/auth` |
-| Logout URI | `https://discharge-alexander-sig-homeland.trycloudflare.com` |
+| Redirect URI | `https://attended-sought-banner-considered.trycloudflare.com/auth` |
+| Logout URI | `https://attended-sought-banner-considered.trycloudflare.com` |
 
 Notas importantes:
 
@@ -194,8 +193,8 @@ Definido en Terraform (`terraform/`):
    - `OPTIONS /{proxy+}` → sin JWT (preflight CORS).
    - `ANY /{proxy+}` → JWT obligatorio.
 4. **EC2 de aplicación** `t3.medium` + Elastic IP + security group (22/80/443/8080). Ahí corren el BFF, los 8 microservicios y nginx.
-5. **EC2 de RabbitMQ** `t3.small` (`terraform/rabbitmq.tf`). AMQP `5672` solo acepta tráfico desde la EC2 de la aplicación. La consola `15672` es la de la demo. User-data instala Docker y levanta `rabbitmq:4.2-management` con el usuario `nexotech`.
-6. Los jars se publican por S3 + SSM. Los servicios que usan la cola leen `SPRING_RABBITMQ_HOST` (IP privada del broker), `PORT`, `USERNAME` y `PASSWORD`.
+5. **EC2 de RabbitMQ** `t3.small` (`terraform/rabbitmq.tf` + `rabbitmq/docker-compose.yml`). Cluster de 2 nodos. AMQP `5672` y `5673` solo desde la EC2 de la aplicación. Consolas `15672` y `15673`.
+6. Los jars se publican por S3 + SSM. Los servicios leen `SPRING_RABBITMQ_ADDRESSES` (IP privada `:5672` y `:5673`), `USERNAME` y `PASSWORD`.
 
 Outputs útiles:
 
@@ -223,11 +222,20 @@ RabbitMQ tiene que estar arriba antes del checkout. `scripts/start-all.sh` lo le
 ```bash
 docker compose up -d rabbitmq
 # consola: http://localhost:15672  (guest / guest)
-# exchange: nexotech.events
 # colas: nexotech.notifications, nexotech.shipments, nexotech.payments
+# cada una: exchange propio, routing key, DLX y DLQ
+# cluster EC2: rabbitmq/docker-compose.yml (puertos 5672/5673 y 15672/15673)
 ```
 
-Al confirmar una compra, `order-service` publica `order.placed` en el exchange `nexotech.events`. De ese evento salen tres acciones: el aviso al usuario, el despacho (`shipment.created`, seguimiento `NX{id}`) y la captura del pago (`AUTHORIZED` → `CAPTURED`). Publicar una reseña encola `review.created`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla.
+Al confirmar una compra, `order-service` publica en tres exchanges: `notification.user`, `shipment.create` y `payment.capture`. Cada cola principal tiene su DLX y su DLQ. El despacho crea el seguimiento `NX{id}` y el pago pasa de `AUTHORIZED` a `CAPTURED`. Una reseña republica el aviso por `notification.user`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla.
+
+| Cola | Exchange | Routing key | DLX | DLQ |
+|------|----------|-------------|-----|-----|
+| `nexotech.notifications` | `nexotech.notifications.exchange` | `notification.user` | `nexotech.notifications.dlx` | `nexotech.notifications.dlq` |
+| `nexotech.shipments` | `nexotech.shipments.exchange` | `shipment.create` | `nexotech.shipments.dlx` | `nexotech.shipments.dlq` |
+| `nexotech.payments` | `nexotech.payments.exchange` | `payment.capture` | `nexotech.payments.dlx` | `nexotech.payments.dlq` |
+
+En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://35.174.107.237:15672 y http://35.174.107.237:15673. Spring declara la topología con `RabbitAdmin` y los consumidores usan `SimpleRabbitListenerContainerFactory` (un mensaje que no se puede convertir se rechaza y cae en la DLQ).
 
 En la nube el broker es la EC2 de RabbitMQ. En local Docker usa `guest` / `guest`.
 
@@ -360,7 +368,7 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 ### 10.1 Antes de empezar (checklist)
 
 - [ ] Lab AWS Academy **activo** + `aws configure` vigente  
-- [ ] Abrir SPA: https://discharge-alexander-sig-homeland.trycloudflare.com  
+- [ ] Abrir SPA: https://attended-sought-banner-considered.trycloudflare.com  
 - [ ] Portal Azure en directorio **Duoc UC** (`72fd0b5a-…`)  
 - [ ] Consola AWS región **us-east-1**  
 - [ ] Terminal con los curls 200/401 listos  
@@ -392,9 +400,9 @@ Consola: región **N. Virginia (us-east-1)**.
 | **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
 | **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
 | **EC2 aplicación** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
-| **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Broker. Consola http://52.207.19.62:15672 |
+| **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Cluster 2 nodos. Consolas :15672 y :15673 |
 | **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la aplicación |
-| **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672 solo desde la app, 15672 público |
+| **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672/5673 solo desde la app, 15672/15673 públicos |
 | **S3** (opcional) | bucket `nexotech-jars-7717` | jars y zip de la SPA |
 | **Terraform** (repo) | `terraform/main.tf`, `ec2.tf`, `rabbitmq.tf` | “Infra como código” |
 

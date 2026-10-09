@@ -36,7 +36,8 @@ public class ShipmentListener {
             + " (" + service + (commune.isBlank() ? "" : " a " + commune) + ").",
         "SHIPPING");
     try {
-      rabbitTemplate.convertAndSend(RabbitConfig.EXCHANGE, RabbitConfig.SHIPMENT_CREATED, notice);
+      rabbitTemplate.convertAndSend(
+          RabbitConfig.NOTIFICATIONS_EXCHANGE, RabbitConfig.NOTIFICATIONS_ROUTING_KEY, notice);
       log.info("Despacho {} registrado para la orden {}", shipment.trackingId(), event.getOrderId());
     } catch (RuntimeException ex) {
       log.warn("Despacho registrado, pero no se publicó el aviso: {}", ex.getMessage());

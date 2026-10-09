@@ -1,0 +1,60 @@
+# Cluster RabbitMQ de 2 nodos para la EC2.
+# Uso: RABBITMQ_PASS=... docker compose -f rabbitmq/docker-compose.yml up -d
+# Consolas: nodo1 :15672  nodo2 :15673
+# AMQP:     nodo1 :5672   nodo2 :5673
+services:
+  rabbit1:
+    image: rabbitmq:4.2-management
+    hostname: rabbit1
+    container_name: nexotech-rabbit1
+    environment:
+      RABBITMQ_ERLANG_COOKIE: nexotech-cluster-cookie
+      RABBITMQ_NODENAME: rabbit@rabbit1
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nexotech}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-nexotech-local}
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbit1_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - rabbitnet
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbit2:
+    image: rabbitmq:4.2-management
+    hostname: rabbit2
+    container_name: nexotech-rabbit2
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+    environment:
+      RABBITMQ_ERLANG_COOKIE: nexotech-cluster-cookie
+      RABBITMQ_NODENAME: rabbit@rabbit2
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-nexotech}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-nexotech-local}
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbit2_data:/var/lib/rabbitmq
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    networks:
+      - rabbitnet
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+networks:
+  rabbitnet:
+
+volumes:
+  rabbit1_data:
+  rabbit2_data:

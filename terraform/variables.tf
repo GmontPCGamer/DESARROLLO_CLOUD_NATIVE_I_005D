@@ -25,7 +25,7 @@ variable "cors_origenes" {
   type        = list(string)
   default = [
     "http://localhost:4200",
-    "https://neutral-lover-realized-collaboration.trycloudflare.com",
+    "https://attended-sought-banner-considered.trycloudflare.com",
   ]
 }
 

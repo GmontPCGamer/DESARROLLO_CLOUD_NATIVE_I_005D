@@ -21,9 +21,25 @@ resource "aws_security_group" "rabbitmq" {
   }
 
   ingress {
-    description = "Consola de administracion (demo)"
+    description     = "AMQP nodo 2 desde la EC2 de la aplicacion"
+    from_port       = 5673
+    to_port         = 5673
+    protocol        = "tcp"
+    security_groups = [aws_security_group.nexotech.id]
+  }
+
+  ingress {
+    description = "Consola nodo 1 (demo)"
     from_port   = 15672
     to_port     = 15672
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Consola nodo 2 (demo)"
+    from_port   = 15673
+    to_port     = 15673
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -59,12 +75,16 @@ resource "aws_instance" "rabbitmq" {
     set -eux
     dnf install -y docker
     systemctl enable --now docker
-    docker run -d --name rabbitmq --restart unless-stopped \
-      -p 5672:5672 -p 15672:15672 \
-      -e RABBITMQ_DEFAULT_USER=nexotech \
-      -e RABBITMQ_DEFAULT_PASS=${random_password.rabbitmq.result} \
-      rabbitmq:4.2-management
+    mkdir -p /usr/libexec/docker/cli-plugins /opt/nexotech-rabbit
+    curl -fsSL -o /usr/libexec/docker/cli-plugins/docker-compose \
+      https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64
+    chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+    echo "Cluster: copiar rabbitmq/docker-compose.yml y rabbitmq.conf a /opt/nexotech-rabbit y ejecutar docker compose up -d"
   EOF
+
+  lifecycle {
+    ignore_changes = [user_data, ami]
+  }
 
   tags = {
     Name = "${var.nombre_proyecto}-rabbitmq"
@@ -87,6 +107,10 @@ output "rabbitmq_public_ip" {
 
 output "rabbitmq_console" {
   value = "http://${aws_instance.rabbitmq.public_ip}:15672"
+}
+
+output "rabbitmq_console_node2" {
+  value = "http://${aws_instance.rabbitmq.public_ip}:15673"
 }
 
 output "rabbitmq_user" {

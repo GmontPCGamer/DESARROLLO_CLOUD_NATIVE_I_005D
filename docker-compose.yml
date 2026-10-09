@@ -1,5 +1,5 @@
-# RabbitMQ local. En AWS el mismo contrato usa Amazon MQ (RabbitMQ)
-# cambiando SPRING_RABBITMQ_HOST, PORT, USERNAME, PASSWORD y SSL.
+# RabbitMQ de un nodo para desarrollo local (guest/guest).
+# El cluster de 2 nodos de la EC2 está en rabbitmq/docker-compose.yml.
 services:
   rabbitmq:
     image: rabbitmq:4.2-management
