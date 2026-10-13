@@ -4,9 +4,9 @@ Tienda cloud-native de demostración para la asignatura **Desarrollo Cloud Nativ
 
 Flujo real en producción (demo):
 
-**Angular + MSAL** → **Microsoft Entra ID** → **AWS API Gateway (JWT Authorizer)** → **BFF Spring Boot** → **8 microservicios**
+**Angular + MSAL** → **Microsoft Entra ID** → **AWS API Gateway (JWT Authorizer)** → **BFF Spring Boot** → **8 microservicios** + **rabbit-admin**
 
-Tras confirmar una compra, `order-service` publica en **RabbitMQ**. Avisos, despacho y captura del pago salen de esa cola, no de una llamada HTTP.
+Tras confirmar una compra, `order-service` publica el mismo evento en **tres colas** de RabbitMQ (avisos, despacho y captura del pago). Cada cola tiene su exchange direct, su binding y su DLQ.
 
 Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md) · Guión de presentación: [GUIÓN_PRESENTACIÓN_EP2.md](GUIÓN_PRESENTACIÓN_EP2.md) · Entra: [MICROSOFT_ENTRA_CONFIG.md](MICROSOFT_ENTRA_CONFIG.md)
 
@@ -14,15 +14,17 @@ Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PR
 
 ## Estado actual (12 de octubre de 2026)
 
-La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h).  
+La demo **está desplegada en AWS Academy** (`us-east-1`).  
 Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval required”).
+
+El laboratorio puede reiniciar las EC2 sin cambios en el código. En ese caso **nginx vuelve solo**; Java, los contenedores de RabbitMQ y `cloudflared` no, porque se lanzaron a mano. La IP pública de RabbitMQ tampoco es fija (la de la aplicación sí: `18.211.7.130`). H2 se vacía al reiniciar: el catálogo se vuelve a cargar, el carrito y los pedidos no. Conviene repetir los smoke checks el día de la presentación.
 
 | Qué | URL / valor |
 |-----|-------------|
 | **Frontend (HTTPS, demo)** | https://addition-shopping-study-lean.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 aplicación (BFF + 8 MS + nginx) | `i-0e3ea93394a16686d` · EIP `18.211.7.130` |
+| EC2 aplicación (BFF + 8 MS + rabbit-admin + nginx) | `i-0e3ea93394a16686d` · EIP `18.211.7.130` |
 | **EC2 RabbitMQ (cluster 2 nodos)** | `i-0f8aae5246e5e7513` · consolas http://52.87.249.149:15672 y :15673 |
 | Usuario del broker | `nexotech` (clave: `terraform output -raw rabbitmq_password`) |
 | **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
@@ -31,7 +33,7 @@ Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval require
 
 > **URL pública a usar:** el tunnel de Cloudflare. En redes con filtro (p. ej. Duoc) `*.sslip.io` responde *Web Filter Violation* (403). El tunnel apunta a nginx en la EC2.
 >
-> Si se reinicia el lab o muere `cloudflared`, la URL `*.trycloudflare.com` puede cambiar: hay que regenerar el tunnel, actualizar Entra redirects y `environment.ts`. Tras la presentación: `cd terraform && terraform destroy`.
+> Si se reinicia el lab o muere `cloudflared`, la URL `*.trycloudflare.com` cambia y no se puede recuperar. Hay que generar otra, actualizar los redirects de Entra, `environment.ts`, el CORS del API Gateway y volver a publicar la SPA. La consola de RabbitMQ también cambia de IP. Tras la presentación: `cd terraform && terraform destroy`.
 
 ### Smoke checks rápidos
 
@@ -107,11 +109,14 @@ Usuario
  catálogo   carrito   órdenes    reseñas
             …inventario, pago, despacho, avisos
 
-  order-service publica en 3 exchanges (cada cola tiene DLX + DLQ):
+  order-service publica en 3 exchanges direct (cada cola tiene DLX + DLQ):
     notification.user  → nexotech.notifications
     shipment.create    → nexotech.shipments      → seguimiento NX{id}
     payment.capture    → nexotech.payments       → AUTHORIZED → CAPTURED
   review y shipping republican el aviso en notification.user
+
+  rabbit-admin-service :8090
+    el BFF lo expone en /api/admin/rabbit (solo ROLE_ADMIN)
 ```
 
 ### Por qué el frontend está en la EC2 (+ tunnel)
@@ -128,8 +133,9 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 |------|------------|---------|
 | Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
 | BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
-| Microservicios | Spring Boot 4 (8 servicios) | `services/*-service/` |
-| Mensajería | RabbitMQ 4.2 en cluster de 2 nodos + Spring AMQP (`RabbitAdmin`, listener container, DLX/DLQ) | `rabbitmq/docker-compose.yml`, `terraform/rabbitmq.tf` |
+| Microservicios | Spring Boot 4 (8 de tienda + `rabbit-admin-service`) | `services/*-service/` |
+| Nombres de colas | Una sola clase, sin repetir los textos | `services/messaging-contract/` |
+| Mensajería | RabbitMQ 4.2 en cluster de 2 nodos + Spring AMQP (`RabbitAdmin`, listener container, ACK manual, DLX/DLQ) | `rabbitmq/docker-compose.yml`, `terraform/rabbitmq.tf` |
 | Infra | Terraform (API GW + 2 EC2 + EIP + SG) | `terraform/` |
 | Deploy | Scripts bash (local + EC2) | `scripts/` |
 
@@ -144,6 +150,7 @@ Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunne
 | `payment-service` | 8086 | Autoriza el pago por HTTP y lo captura al consumir `payment.capture` |
 | `shipping-service` | 8087 | Cotiza por HTTP. Al consumir `shipment.create` crea `NX{id}` y republica el aviso |
 | `review-service` | 8088 | Reseñas. Al publicar una, envía el aviso por `notification.user` |
+| `rabbit-admin-service` | 8090 | Crea y borra colas, exchanges y bindings. No es público; el BFF lo proxea |
 
 Rutas Angular relevantes:
 
@@ -192,7 +199,7 @@ Definido en Terraform (`terraform/`):
    - `GET /api/public/{proxy+}` → sin JWT (catálogo anónimo).
    - `OPTIONS /{proxy+}` → sin JWT (preflight CORS).
    - `ANY /{proxy+}` → JWT obligatorio.
-4. **EC2 de aplicación** `t3.medium` + Elastic IP + security group (22/80/443/8080). Ahí corren el BFF, los 8 microservicios y nginx.
+4. **EC2 de aplicación** `t3.medium` + Elastic IP + security group (22/80/443/8080). Ahí corren el BFF, los 8 microservicios, `rabbit-admin-service`, nginx (`127.0.0.1:8089`) y `cloudflared`.
 5. **EC2 de RabbitMQ** `t3.small` (`terraform/rabbitmq.tf` + `rabbitmq/docker-compose.yml`). Cluster de 2 nodos. AMQP `5672` y `5673` solo desde la EC2 de la aplicación. Consolas `15672` y `15673`.
 6. Los jars se publican por S3 + SSM. Los servicios leen `SPRING_RABBITMQ_ADDRESSES` (IP privada `:5672` y `:5673`), `USERNAME` y `PASSWORD`.
 
@@ -235,7 +242,9 @@ Al confirmar una compra, `order-service` publica en tres exchanges: `notificatio
 | `nexotech.shipments` | `nexotech.shipments.exchange` | `shipment.create` | `nexotech.shipments.dlx` | `nexotech.shipments.dlq` |
 | `nexotech.payments` | `nexotech.payments.exchange` | `payment.capture` | `nexotech.payments.dlx` | `nexotech.payments.dlq` |
 
-En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://52.87.249.149:15672 y http://52.87.249.149:15673. Los nombres viven en una sola clase, `MessagingNames`. Spring declara la topología con `RabbitAdmin`. Los consumidores confirman a mano: ACK si el mensaje se procesó, NACK con requeue una vez si el error es recuperable, y NACK sin requeue (cae en la DLQ y queda en el log) si el mensaje es inválido o el reintento ya se usó.
+En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://52.87.249.149:15672 y http://52.87.249.149:15673. Los tres exchanges de la tienda son **direct** (la clave tiene que coincidir exacta: `notification.user`, `shipment.create`, `payment.capture`).
+
+Los nombres están solo en `services/messaging-contract/src/main/java/com/cloudnative/messaging/MessagingNames.java`. Cada servicio los reexporta; hay que instalar ese módulo (`mvn install`) antes de empaquetar los demás. `scripts/start-all.sh` lo hace cuando compila. Spring declara la topología con `RabbitAdmin`. Los consumidores confirman a mano: ACK si el mensaje se procesó, NACK con requeue una vez si el error es recuperable, y NACK sin requeue (cae en la DLQ y queda en el log) si el mensaje es inválido o el reintento ya se usó. Un JSON que no se puede convertir ni entra al listener: el contenedor lo rechaza hacia la DLQ.
 
 `rabbit-admin-service` (`:8090`) expone la API de administración. El BFF la publica solo para `ROLE_ADMIN`:
 
@@ -248,7 +257,7 @@ En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbi
 | Crear binding | `POST /api/admin/rabbit/bindings` |
 | Borrar binding | `DELETE /api/admin/rabbit/bindings` |
 
-Un nombre vacío o con caracteres no permitidos responde 400. Las colas `nexotech.*` de la tienda no se pueden borrar desde esta API.
+Un nombre vacío o con caracteres no permitidos responde 400. No se pueden borrar los 12 recursos de `MessagingNames.storeTopology()` (colas, exchanges, DLX y DLQ de la tienda) ni un exchange `amq.*`. Crear un exchange acepta `direct`, `topic`, `fanout` o `headers`; la topología de la compra sigue siendo direct. Sin token, estas rutas responden 401.
 
 En la nube el broker es la EC2 de RabbitMQ. En local Docker usa `guest` / `guest`.
 
@@ -316,8 +325,11 @@ terraform apply tfplan
 # 3) Subir y arrancar en EC2
 ../scripts/deploy-ec2.sh
 
-# 4) Build SPA + publicar en nginx (script o zip vía S3/SSM)
-../scripts/deploy-frontend.sh
+# 4) La SPA de la demo NO sale de deploy-frontend.sh:
+#    ese script reescribe environment.ts con el client ID antiguo
+#    (097bfd84 / nexotech-student-api) y el dominio sslip.io.
+#    El build vigente usa environment.ts (client f7d7e5dd y el tunnel Cloudflare)
+#    y se publica en /var/www/nexotech, servido por nginx en 127.0.0.1:8089.
 ```
 
 En Academy, si SSH con `vockey.pem` falla, el despliegue se hace con **AWS Systems Manager (SSM)** + bucket S3 auxiliar para jars/SPA.
@@ -382,10 +394,12 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 
 - [ ] Lab AWS Academy **activo** + `aws configure` vigente  
 - [ ] Abrir SPA: https://addition-shopping-study-lean.trycloudflare.com  
+- [ ] Consolas RabbitMQ: http://52.87.249.149:15672 y :15673 (usuario `nexotech`; si no cargan, la EC2 se reinició y la IP pública cambió)  
 - [ ] Portal Azure en directorio **Duoc UC** (`72fd0b5a-…`)  
 - [ ] Consola AWS región **us-east-1**  
 - [ ] Terminal con los curls 200/401 listos  
-- [ ] Login de prueba: **`fe.ardiles@duocuc.cl`** (admin de la app)
+- [ ] Login de prueba: **`fe.ardiles@duocuc.cl`** (admin de la app)  
+- [ ] Una compra de prueba: las tres colas bajan a 0; `nexotech.notifications.dlq` conserva los mensajes rechazados  
 
 ### 10.2 Dónde está cada cosa en Azure (Entra)
 
@@ -412,7 +426,7 @@ Consola: región **N. Virginia (us-east-1)**.
 | **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
 | **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
 | **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
-| **EC2 aplicación** | EC2 → Instances → `i-0e3ea93394a16686d` | BFF + 8 MS + nginx + cloudflared |
+| **EC2 aplicación** | EC2 → Instances → `i-0e3ea93394a16686d` | BFF + 8 MS + rabbit-admin + nginx + cloudflared |
 | **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Cluster 2 nodos. Consolas :15672 y :15673 |
 | **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la aplicación |
 | **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672/5673 solo desde la app, 15672/15673 públicos |
@@ -441,7 +455,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 | 8:30–10:00 | Cierre rúbrica | “MSAL autentica; Gateway y BFF validan el mismo JWT” |
 
 **Frase de cierre:**  
-> *“Entra emite el JWT; API Gateway actúa como API Manager en el borde; el BFF vuelve a validar y orquesta ocho microservicios. FE y BE están en la nube.”*
+> *“Entra emite el JWT; API Gateway actúa como API Manager en el borde; el BFF vuelve a validar y orquesta ocho microservicios. La compra publica en tres colas de un cluster RabbitMQ, con ACK manual y DLQ. FE y BE están en la nube.”*
 
 ---
 
@@ -468,7 +482,9 @@ cd terraform && terraform fmt -check -recursive && terraform validate
 - [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
 - [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
 - [x] App Entra en tenant Duoc (login rápido sin admin approval)
-- [x] RabbitMQ en EC2: compra, despacho, captura de pago y reseña  
+- [x] RabbitMQ en EC2: cluster de 2 nodos, tres colas con exchange direct, DLX y DLQ  
+- [x] ACK manual (éxito, un reintento, o DLQ) y API de administración en `rabbit-admin-service`  
+- [x] Nombres de la topología centralizados en `MessagingNames`  
 - [ ] CI/CD (GitHub Actions)  
 - [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
 
