@@ -26,3 +26,4 @@ app:
     payments: ${PAYMENTS_URL:http://localhost:8086}
     shipping: ${SHIPPING_URL:http://localhost:8087}
     reviews: ${REVIEWS_URL:http://localhost:8088}
+    rabbit-admin: ${RABBIT_ADMIN_URL:http://localhost:8090}

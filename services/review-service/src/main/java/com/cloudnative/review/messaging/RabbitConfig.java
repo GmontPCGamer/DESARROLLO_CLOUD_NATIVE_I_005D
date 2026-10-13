@@ -12,14 +12,16 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.cloudnative.messaging.MessagingNames;
+
 @Configuration
 public class RabbitConfig {
 
-  public static final String NOTIFICATIONS_EXCHANGE = "nexotech.notifications.exchange";
-  public static final String NOTIFICATIONS_ROUTING_KEY = "notification.user";
-  public static final String NOTIFICATIONS = "nexotech.notifications";
-  public static final String NOTIFICATIONS_DLX = "nexotech.notifications.dlx";
-  public static final String NOTIFICATIONS_DLQ = "nexotech.notifications.dlq";
+  public static final String NOTIFICATIONS_EXCHANGE = MessagingNames.NOTIFICATIONS_EXCHANGE;
+  public static final String NOTIFICATIONS_ROUTING_KEY = MessagingNames.NOTIFICATIONS_ROUTING_KEY;
+  public static final String NOTIFICATIONS = MessagingNames.NOTIFICATIONS;
+  public static final String NOTIFICATIONS_DLX = MessagingNames.NOTIFICATIONS_DLX;
+  public static final String NOTIFICATIONS_DLQ = MessagingNames.NOTIFICATIONS_DLQ;
 
   @Bean
   public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {

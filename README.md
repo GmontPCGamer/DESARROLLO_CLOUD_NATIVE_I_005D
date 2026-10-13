@@ -12,18 +12,18 @@ Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PR
 
 ---
 
-## Estado actual (9 de octubre de 2026)
+## Estado actual (12 de octubre de 2026)
 
 La demo **está desplegada en AWS Academy** (`us-east-1`) para una ventana corta (~48 h).  
 Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval required”).
 
 | Qué | URL / valor |
 |-----|-------------|
-| **Frontend (HTTPS, demo)** | https://attended-sought-banner-considered.trycloudflare.com |
+| **Frontend (HTTPS, demo)** | https://addition-shopping-study-lean.trycloudflare.com |
 | **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
 | **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 aplicación (BFF + 8 MS + nginx) | `i-098478353e2ca4634` · EIP `18.211.7.130` |
-| **EC2 RabbitMQ (cluster 2 nodos)** | `i-0f8aae5246e5e7513` · consolas http://35.174.107.237:15672 y :15673 |
+| EC2 aplicación (BFF + 8 MS + nginx) | `i-0e3ea93394a16686d` · EIP `18.211.7.130` |
+| **EC2 RabbitMQ (cluster 2 nodos)** | `i-0f8aae5246e5e7513` · consolas http://52.87.249.149:15672 y :15673 |
 | Usuario del broker | `nexotech` (clave: `terraform output -raw rabbitmq_password`) |
 | **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
 | Tenant Entra | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
@@ -43,7 +43,7 @@ curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/p
 curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
 
 # Frontend (tunnel) → 200
-curl -sI "https://attended-sought-banner-considered.trycloudflare.com/" | head -n 1
+curl -sI "https://addition-shopping-study-lean.trycloudflare.com/" | head -n 1
 ```
 
 ---
@@ -167,8 +167,8 @@ Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
 | Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
 | Authority | `https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
 | API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://attended-sought-banner-considered.trycloudflare.com/auth` |
-| Logout URI | `https://attended-sought-banner-considered.trycloudflare.com` |
+| Redirect URI | `https://addition-shopping-study-lean.trycloudflare.com/auth` |
+| Logout URI | `https://addition-shopping-study-lean.trycloudflare.com` |
 
 Notas importantes:
 
@@ -235,7 +235,20 @@ Al confirmar una compra, `order-service` publica en tres exchanges: `notificatio
 | `nexotech.shipments` | `nexotech.shipments.exchange` | `shipment.create` | `nexotech.shipments.dlx` | `nexotech.shipments.dlq` |
 | `nexotech.payments` | `nexotech.payments.exchange` | `payment.capture` | `nexotech.payments.dlx` | `nexotech.payments.dlq` |
 
-En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://35.174.107.237:15672 y http://35.174.107.237:15673. Spring declara la topología con `RabbitAdmin` y los consumidores usan `SimpleRabbitListenerContainerFactory` (un mensaje que no se puede convertir se rechaza y cae en la DLQ).
+En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://52.87.249.149:15672 y http://52.87.249.149:15673. Los nombres viven en una sola clase, `MessagingNames`. Spring declara la topología con `RabbitAdmin`. Los consumidores confirman a mano: ACK si el mensaje se procesó, NACK con requeue una vez si el error es recuperable, y NACK sin requeue (cae en la DLQ y queda en el log) si el mensaje es inválido o el reintento ya se usó.
+
+`rabbit-admin-service` (`:8090`) expone la API de administración. El BFF la publica solo para `ROLE_ADMIN`:
+
+| Acción | Ruta |
+|--------|------|
+| Crear cola | `POST /api/admin/rabbit/queues` |
+| Borrar cola | `DELETE /api/admin/rabbit/queues/{name}` |
+| Crear exchange | `POST /api/admin/rabbit/exchanges` |
+| Borrar exchange | `DELETE /api/admin/rabbit/exchanges/{name}` |
+| Crear binding | `POST /api/admin/rabbit/bindings` |
+| Borrar binding | `DELETE /api/admin/rabbit/bindings` |
+
+Un nombre vacío o con caracteres no permitidos responde 400. Las colas `nexotech.*` de la tienda no se pueden borrar desde esta API.
 
 En la nube el broker es la EC2 de RabbitMQ. En local Docker usa `guest` / `guest`.
 
@@ -368,7 +381,7 @@ Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
 ### 10.1 Antes de empezar (checklist)
 
 - [ ] Lab AWS Academy **activo** + `aws configure` vigente  
-- [ ] Abrir SPA: https://attended-sought-banner-considered.trycloudflare.com  
+- [ ] Abrir SPA: https://addition-shopping-study-lean.trycloudflare.com  
 - [ ] Portal Azure en directorio **Duoc UC** (`72fd0b5a-…`)  
 - [ ] Consola AWS región **us-east-1**  
 - [ ] Terminal con los curls 200/401 listos  
@@ -399,7 +412,7 @@ Consola: región **N. Virginia (us-east-1)**.
 | **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
 | **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
 | **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
-| **EC2 aplicación** | EC2 → Instances → `i-098478353e2ca4634` | BFF + 8 MS + nginx + cloudflared |
+| **EC2 aplicación** | EC2 → Instances → `i-0e3ea93394a16686d` | BFF + 8 MS + nginx + cloudflared |
 | **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Cluster 2 nodos. Consolas :15672 y :15673 |
 | **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la aplicación |
 | **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672/5673 solo desde la app, 15672/15673 públicos |

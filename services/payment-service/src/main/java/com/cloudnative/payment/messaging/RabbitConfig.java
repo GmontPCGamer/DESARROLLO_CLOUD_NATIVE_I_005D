@@ -5,6 +5,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
@@ -14,14 +15,16 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.cloudnative.messaging.MessagingNames;
+
 @Configuration
 public class RabbitConfig {
 
-  public static final String PAYMENTS = "nexotech.payments";
-  public static final String PAYMENTS_EXCHANGE = "nexotech.payments.exchange";
-  public static final String PAYMENTS_ROUTING_KEY = "payment.capture";
-  public static final String PAYMENTS_DLX = "nexotech.payments.dlx";
-  public static final String PAYMENTS_DLQ = "nexotech.payments.dlq";
+  public static final String PAYMENTS = MessagingNames.PAYMENTS;
+  public static final String PAYMENTS_EXCHANGE = MessagingNames.PAYMENTS_EXCHANGE;
+  public static final String PAYMENTS_ROUTING_KEY = MessagingNames.PAYMENTS_ROUTING_KEY;
+  public static final String PAYMENTS_DLX = MessagingNames.PAYMENTS_DLX;
+  public static final String PAYMENTS_DLQ = MessagingNames.PAYMENTS_DLQ;
 
   @Bean
   public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
@@ -77,6 +80,7 @@ public class RabbitConfig {
     SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
     factory.setConnectionFactory(connectionFactory);
     factory.setMessageConverter(converter);
+    factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
     factory.setDefaultRequeueRejected(false);
     factory.setErrorHandler(new ConditionalRejectingErrorHandler());
     return factory;

@@ -1,7 +1,7 @@
 package com.cloudnative.order.messaging;
 
 /**
- * Evento que el productor publica en {@code nexotech.order.notifications}.
+ * Evento que el productor publica en las tres colas de {@code MessagingNames}.
  * El consumidor (notification-service) persiste el aviso para el usuario.
  */
 public class OrderPlacedMessage {

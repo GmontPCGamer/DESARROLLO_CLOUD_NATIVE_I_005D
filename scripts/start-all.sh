@@ -74,10 +74,13 @@ SERVICES=(
   "payment-service:services/payment-service:8086"
   "shipping-service:services/shipping-service:8087"
   "review-service:services/review-service:8088"
+  "rabbit-admin-service:services/rabbit-admin-service:8090"
   "backend:backend:8080"
 )
 
 if [[ $BUILD -eq 1 ]]; then
+  echo "Instalando contrato de mensajería…"
+  (cd "$ROOT/services/messaging-contract" && mvn -q install)
   echo "Compilando (mvn -q -DskipTests package)…"
   for entry in "${SERVICES[@]}"; do
     IFS=: read -r name dir _ <<<"$entry"

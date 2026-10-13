@@ -12,6 +12,8 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import com.cloudnative.messaging.MessagingNames;
+
 /**
  * Tres colas principales. Cada una tiene su exchange, binding, routing key,
  * DLX y DLQ. La reserva de stock no pasa por aquí.
@@ -19,23 +21,23 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitConfig {
 
-  public static final String NOTIFICATIONS = "nexotech.notifications";
-  public static final String NOTIFICATIONS_EXCHANGE = "nexotech.notifications.exchange";
-  public static final String NOTIFICATIONS_ROUTING_KEY = "notification.user";
-  public static final String NOTIFICATIONS_DLX = "nexotech.notifications.dlx";
-  public static final String NOTIFICATIONS_DLQ = "nexotech.notifications.dlq";
+  public static final String NOTIFICATIONS = MessagingNames.NOTIFICATIONS;
+  public static final String NOTIFICATIONS_EXCHANGE = MessagingNames.NOTIFICATIONS_EXCHANGE;
+  public static final String NOTIFICATIONS_ROUTING_KEY = MessagingNames.NOTIFICATIONS_ROUTING_KEY;
+  public static final String NOTIFICATIONS_DLX = MessagingNames.NOTIFICATIONS_DLX;
+  public static final String NOTIFICATIONS_DLQ = MessagingNames.NOTIFICATIONS_DLQ;
 
-  public static final String SHIPMENTS = "nexotech.shipments";
-  public static final String SHIPMENTS_EXCHANGE = "nexotech.shipments.exchange";
-  public static final String SHIPMENTS_ROUTING_KEY = "shipment.create";
-  public static final String SHIPMENTS_DLX = "nexotech.shipments.dlx";
-  public static final String SHIPMENTS_DLQ = "nexotech.shipments.dlq";
+  public static final String SHIPMENTS = MessagingNames.SHIPMENTS;
+  public static final String SHIPMENTS_EXCHANGE = MessagingNames.SHIPMENTS_EXCHANGE;
+  public static final String SHIPMENTS_ROUTING_KEY = MessagingNames.SHIPMENTS_ROUTING_KEY;
+  public static final String SHIPMENTS_DLX = MessagingNames.SHIPMENTS_DLX;
+  public static final String SHIPMENTS_DLQ = MessagingNames.SHIPMENTS_DLQ;
 
-  public static final String PAYMENTS = "nexotech.payments";
-  public static final String PAYMENTS_EXCHANGE = "nexotech.payments.exchange";
-  public static final String PAYMENTS_ROUTING_KEY = "payment.capture";
-  public static final String PAYMENTS_DLX = "nexotech.payments.dlx";
-  public static final String PAYMENTS_DLQ = "nexotech.payments.dlq";
+  public static final String PAYMENTS = MessagingNames.PAYMENTS;
+  public static final String PAYMENTS_EXCHANGE = MessagingNames.PAYMENTS_EXCHANGE;
+  public static final String PAYMENTS_ROUTING_KEY = MessagingNames.PAYMENTS_ROUTING_KEY;
+  public static final String PAYMENTS_DLX = MessagingNames.PAYMENTS_DLX;
+  public static final String PAYMENTS_DLQ = MessagingNames.PAYMENTS_DLQ;
 
   @Bean
   public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {

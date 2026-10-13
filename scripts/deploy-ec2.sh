@@ -24,7 +24,7 @@ echo "==> Instalando Java…"
 
 echo "==> Subiendo jars (SCP)…"
 "${SCP[@]}" "$ROOT/backend/target/backend-0.0.1-SNAPSHOT.jar" ec2-user@"$IP":/opt/nexotech/jars/backend.jar
-for svc in catalog cart order notification inventory payment shipping review; do
+for svc in catalog cart order notification inventory payment shipping review rabbit-admin; do
   "${SCP[@]}" "$ROOT/services/${svc}-service/target/${svc}-service-0.0.1-SNAPSHOT.jar" \
     ec2-user@"$IP":/opt/nexotech/jars/${svc}-service.jar
 done
@@ -44,6 +44,7 @@ export INVENTORY_URL=http://127.0.0.1:8085
 export PAYMENTS_URL=http://127.0.0.1:8086
 export SHIPPING_URL=http://127.0.0.1:8087
 export REVIEWS_URL=http://127.0.0.1:8088
+export RABBIT_ADMIN_URL=http://127.0.0.1:8090
 EOF
 
 "${SSH[@]}" 'bash -s' <<'REMOTE'
@@ -70,6 +71,7 @@ start_one inventory-service inventory-service.jar
 start_one payment-service payment-service.jar
 start_one shipping-service shipping-service.jar
 start_one review-service review-service.jar
+start_one rabbit-admin-service rabbit-admin-service.jar
 sleep 12
 start_one backend backend.jar
 
