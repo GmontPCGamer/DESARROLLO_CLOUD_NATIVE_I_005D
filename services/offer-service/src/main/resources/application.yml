@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: offer-service
+  profiles:
+    default: local
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092,localhost:19094}
+    consumer:
+      # La proyección se reconstruye desde el inicio al arrancar cada instancia.
+      group-id: offer-service-${random.uuid}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+server:
+  port: 8091

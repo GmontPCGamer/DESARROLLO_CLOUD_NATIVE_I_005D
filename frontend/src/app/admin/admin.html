@@ -62,3 +62,5 @@
     </table>
   </div>
 }
+
+@if (!forbidden() && !loading() && !error()) { <app-streams-admin /> }

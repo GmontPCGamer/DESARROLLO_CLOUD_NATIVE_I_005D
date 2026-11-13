@@ -67,6 +67,13 @@ export interface Review {
   createdAt: string;
 }
 
+export interface Offer {
+  productId: number;
+  title: string;
+  reason: string;
+  reviewCount: number;
+}
+
 export interface PaymentIntent {
   paymentId: string;
   status: string;

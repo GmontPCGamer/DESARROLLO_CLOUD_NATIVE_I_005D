@@ -34,3 +34,13 @@ terraform/*.tfplan.*
 
 # Procesos locales (scripts/start-all.sh)
 .run/
+
+# Dependencias, cachés y configuración privada
+node_modules/
+.angular/
+__pycache__/
+*.pem
+*.key
+.env
+.env.*
+terraform/tfplan

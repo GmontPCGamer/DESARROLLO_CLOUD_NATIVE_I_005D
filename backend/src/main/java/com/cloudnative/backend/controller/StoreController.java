@@ -28,6 +28,7 @@ import com.cloudnative.backend.client.StoreGateway.OrderDto;
 import com.cloudnative.backend.client.StoreGateway.PaymentDto;
 import com.cloudnative.backend.client.StoreGateway.ProductDto;
 import com.cloudnative.backend.client.StoreGateway.ReviewDto;
+import com.cloudnative.backend.client.StoreGateway.OfferDto;
 import com.cloudnative.backend.client.StoreGateway.ShippingDto;
 import com.cloudnative.backend.client.StoreGateway.StockDto;
 
@@ -58,6 +59,12 @@ public class StoreController {
   @GetMapping("/public/products/{id}")
   public ProductDto product(@PathVariable Long id) {
     return store.product(id);
+  }
+
+  @GetMapping("/public/offers")
+  public List<OfferDto> offers() {
+    List<OfferDto> result = store.offers();
+    return result == null ? List.of() : result;
   }
 
   @GetMapping("/public/products/{productId}/reviews")

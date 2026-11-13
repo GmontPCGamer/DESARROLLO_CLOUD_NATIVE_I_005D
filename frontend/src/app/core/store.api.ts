@@ -9,6 +9,7 @@ import {
   CheckoutResponse,
   Me,
   NotificationItem,
+  Offer,
   Order,
   PaymentIntent,
   ProblemDetail,
@@ -44,6 +45,10 @@ export class StoreApi {
 
   reviews(productId: number): Observable<Review[]> {
     return this.http.get<Review[]>(`${this.base}/public/products/${productId}/reviews`);
+  }
+
+  offers(): Observable<Offer[]> {
+    return this.http.get<Offer[]>(`${this.base}/public/offers`);
   }
 
   // ---- Sesión ----

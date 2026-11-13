@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { AdminStockRow } from '../core/models';
 import { SessionStore } from '../core/session.store';
 import { StoreApi, errorMessage } from '../core/store.api';
+import { StreamsAdmin } from './streams-admin';
 import { formatClp } from '../core/money';
 
 /**
@@ -10,7 +11,7 @@ import { formatClp } from '../core/money';
  * token no trae el rol (claim `roles`) ni el usuario está en APP_ADMIN_USERS.
  */
 @Component({
-  imports: [RouterLink],
+  imports: [RouterLink, StreamsAdmin],
   selector: 'app-admin',
   templateUrl: './admin.html',
 })
