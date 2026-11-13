@@ -1,0 +1,49 @@
+<section class="panel" style="margin: 1.5rem 0">
+  <p class="kicker">Kafka y RabbitMQ</p>
+  <h2>Eventos y ventas</h2>
+  <p class="muted">Las reseñas generan productos destacados. Las compras confirmadas actualizan la analítica de ventas. RabbitMQ mantiene los avisos, pagos y despachos.</p>
+  <div class="actions">
+    <button class="btn btn-secondary" (click)="refresh()">Actualizar</button>
+    <a class="btn btn-ghost" [href]="kafkaUi" target="_blank" rel="noopener">Kafka UI · acceso privado</a>
+    <a class="btn btn-ghost" [href]="rabbitUi" target="_blank" rel="noopener">RabbitMQ · acceso privado</a>
+  </div>
+  @if (sales(); as summary) {
+    <div class="actions" style="gap: 2rem; margin: 1.5rem 0; flex-wrap: wrap">
+      <div><strong>{{ summary.orderCount }}</strong><p class="muted">Compras procesadas</p></div>
+      <div><strong>{{ formatClp(summary.revenue) }}</strong><p class="muted">Ventas confirmadas</p></div>
+      <div><strong>{{ summary.units }}</strong><p class="muted">Unidades vendidas</p></div>
+    </div>
+  }
+  @if (error()) { <p class="alert" role="alert">{{ error() }}</p> }
+  @if (message()) { <p class="alert success" role="status">{{ message() }}</p> }
+  <p class="muted">Los dashboards se abren por el acceso privado de administración; el panel de topics y ventas funciona con tu sesión Microsoft.</p>
+  <h3>Administrar topics</h3>
+  <div class="actions" style="align-items: end; flex-wrap: wrap; margin-bottom: 1rem">
+    <label>Topic de prueba<input aria-label="Nombre del topic" [value]="topicName()" (input)="topicName.set($any($event.target).value)" /></label>
+    <label>Retención en horas<input aria-label="Retención en horas" type="number" min="1" max="8760" [value]="retentionHours()" (input)="retentionHours.set(+$any($event.target).value || 168)" /></label>
+    <button class="btn btn-primary" [disabled]="busy()" (click)="create()">Crear topic</button>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="data"><thead><tr><th>Topic</th><th>Particiones</th><th>Réplicas</th><th>Operaciones</th></tr></thead><tbody>
+    @for (topic of topics(); track topic.name) {
+      <tr><td>{{ topic.name }} @if(topic.protectedTopic) { <span class="pill">Negocio</span> }</td><td>{{ topic.partitions }}</td><td>{{ topic.replicas }}</td><td>
+        <div class="actions" style="flex-wrap:wrap">
+          <button class="btn btn-ghost" (click)="inspect(topic)">Ver configuración</button>
+          @if(topic.name.startsWith('demo.')) {
+            <button class="btn btn-ghost" [disabled]="busy()" (click)="update(topic)">Aplicar retención</button>
+            <button class="btn btn-ghost" [disabled]="busy() || topic.partitions >= 24" (click)="addPartition(topic)">Agregar partición</button>
+            <button class="btn btn-ghost" [disabled]="busy()" (click)="remove(topic)">Eliminar prueba</button>
+          }
+        </div>
+      </td></tr>
+    }</tbody></table>
+  </div>
+  <h3>Grupos de consumidores</h3>
+  <p class="muted">Analítica conserva su avance y evita duplicar ventas. Ofertas reconstruye sus señales desde el historial en cada inicio.</p>
+  <div class="actions" style="flex-wrap:wrap">
+    @for(group of groups();track group.groupId) {
+      <button class="btn btn-ghost" (click)="inspectGroup(group)">{{ group.groupId }} · {{ group.state }}</button>
+    }
+  </div>
+  @if(details()) { <pre style="max-height:20rem;overflow:auto;padding:1rem;background:#f5f7fa">{{ details() | json }}</pre> }
+</section>

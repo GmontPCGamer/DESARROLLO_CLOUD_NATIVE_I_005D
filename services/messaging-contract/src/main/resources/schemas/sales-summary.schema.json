@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "orderCount",
+    "revenue",
+    "units",
+    "currency"
+  ],
+  "properties": {
+    "orderCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "revenue": {
+      "type": "number",
+      "minimum": 0
+    },
+    "units": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currency": {
+      "const": "CLP"
+    }
+  }
+}

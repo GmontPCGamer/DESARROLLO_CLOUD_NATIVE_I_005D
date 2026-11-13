@@ -1,0 +1,6 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          secret-key: ${JWT_LOCAL_SECRET:c2VjcmV0by1sb2NhbC1wYXJhLWRlc2Fycm9sbG8tZGVtby1jbGF2ZS0xMjM0NTY3ODkwYWJjZGVm}

@@ -25,7 +25,7 @@ variable "cors_origenes" {
   type        = list(string)
   default = [
     "http://localhost:4200",
-    "https://addition-shopping-study-lean.trycloudflare.com",
+    "https://knowledge-unix-tasks-into.trycloudflare.com",
   ]
 }
 
@@ -48,9 +48,9 @@ variable "azure_tenant_id" {
 }
 
 variable "ec2_instance_type" {
-  description = "Tipo de instancia EC2 (demo corta: t3.medium)."
+  description = "Tipo de instancia EC2 (13 servicios Spring Boot, ZooKeeper, Kafka y UI: 8 GB)."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.large"
 }
 
 variable "ec2_key_name" {

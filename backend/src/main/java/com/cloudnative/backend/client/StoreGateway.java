@@ -27,6 +27,7 @@ public class StoreGateway {
   private final RestClient payments;
   private final RestClient shipping;
   private final RestClient reviews;
+  private final RestClient offers;
 
   public StoreGateway(
       RestClient.Builder builder,
@@ -37,7 +38,8 @@ public class StoreGateway {
       @Value("${app.services.inventory}") String inventoryUrl,
       @Value("${app.services.payments}") String paymentsUrl,
       @Value("${app.services.shipping}") String shippingUrl,
-      @Value("${app.services.reviews}") String reviewsUrl) {
+      @Value("${app.services.reviews}") String reviewsUrl,
+      @Value("${app.services.offers}") String offersUrl) {
     this.catalog = builder.clone().baseUrl(catalogUrl).build();
     this.cart = builder.clone().baseUrl(cartUrl).build();
     this.orders = builder.clone().baseUrl(ordersUrl).build();
@@ -46,6 +48,7 @@ public class StoreGateway {
     this.payments = builder.clone().baseUrl(paymentsUrl).build();
     this.shipping = builder.clone().baseUrl(shippingUrl).build();
     this.reviews = builder.clone().baseUrl(reviewsUrl).build();
+    this.offers = builder.clone().baseUrl(offersUrl).build();
   }
 
   // ---- Catálogo (público) ---------------------------------------------------
@@ -238,6 +241,10 @@ public class StoreGateway {
         .body(new ParameterizedTypeReference<>() {});
   }
 
+  public List<OfferDto> offers() {
+    return offers.get().uri("/api/public/offers").retrieve().body(new ParameterizedTypeReference<>() {});
+  }
+
   public ReviewDto addReview(String token, Long productId, int rating, String comment) {
     Map<String, Object> body = new java.util.HashMap<>();
     body.put("rating", rating);
@@ -309,4 +316,6 @@ public class StoreGateway {
 
   public record ReviewDto(Long id, Long productId, String author, int rating, String comment, Instant createdAt) {
   }
+
+  public record OfferDto(Long productId, String title, String reason, int reviewCount) {}
 }

@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: kafka-admin-service
+  profiles:
+    default: local
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092,localhost:19094}
+server:
+  port: 8094

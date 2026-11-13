@@ -25,6 +25,9 @@ import com.cloudnative.order.client.StoreClients.CartItemDto;
 import com.cloudnative.order.client.StoreClients.ProductDto;
 import com.cloudnative.order.domain.CustomerOrder;
 import com.cloudnative.order.messaging.OrderEventPublisher;
+import com.cloudnative.order.messaging.OrderKafkaPublisher;
+import com.cloudnative.messaging.OrderConfirmed;
+import java.util.UUID;
 import com.cloudnative.order.messaging.OrderPlacedMessage;
 import com.cloudnative.order.domain.OrderLine;
 import com.cloudnative.order.repo.CustomerOrderRepository;
@@ -36,11 +39,13 @@ public class OrderController {
   private final CustomerOrderRepository orders;
   private final StoreClients clients;
   private final OrderEventPublisher events;
+  private final OrderKafkaPublisher kafka;
 
-  public OrderController(CustomerOrderRepository orders, StoreClients clients, OrderEventPublisher events) {
+  public OrderController(CustomerOrderRepository orders, StoreClients clients, OrderEventPublisher events, OrderKafkaPublisher kafka) {
     this.orders = orders;
     this.clients = clients;
     this.events = events;
+    this.kafka = kafka;
   }
 
   @GetMapping("/public/health")
@@ -134,6 +139,9 @@ public class OrderController {
     event.setShippingRegion(saved.getShippingRegion());
     event.setShippingCommune(saved.getShippingCommune());
     events.publishOrderNotification(event);
+    kafka.publish(new OrderConfirmed(UUID.randomUUID().toString(), saved.getId(), saved.getTotal(), "CLP",
+        saved.getCreatedAt(), saved.getLines().stream().map(line -> new OrderConfirmed.Item(
+            line.getProductId(), line.getQuantity(), line.getUnitPrice())).toList()));
 
     return toResponse(saved);
   }

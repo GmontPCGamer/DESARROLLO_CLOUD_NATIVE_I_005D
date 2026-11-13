@@ -1,73 +1,37 @@
 #!/usr/bin/env bash
-# Build Angular prod, lo publica con nginx en la EC2 y obtiene certificado Let's Encrypt (sslip.io).
+# Publica Angular en la EC2 existente mediante SSM y conserva la versión anterior.
 set -euo pipefail
-
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT/terraform"
-IP="$(terraform output -raw ec2_public_ip)"
-FE_URL="$(terraform output -raw frontend_url)"
-API_URL="$(terraform output -raw url_deploy)"
-HOST="${IP//./-}.sslip.io"
-KEY="${NEXOTECH_SSH_KEY:-$HOME/.ssh/vockey.pem}"
-SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ec2-user@"$IP")
-SCP=(scp -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-
-ENV_FILE="$ROOT/frontend/src/environments/environment.ts"
-cat >"$ENV_FILE" <<EOF
-export const environment = {
-  production: true,
-  msal: {
-    clientId: '097bfd84-a8e3-4232-9048-718f4d648efd',
-    authority: 'https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250',
-    apiScope: 'api://nexotech-student-api/access_as_user',
-    redirectUri: '${FE_URL}/auth',
-    postLogoutRedirectUri: '${FE_URL}',
-  },
-  backendApiUrl: '${API_URL}/api',
-};
-EOF
-
-echo "==> Build Angular → API=$API_URL  FE=$FE_URL"
-export PATH="/opt/homebrew/opt/node@24/bin:$PATH"
-cd "$ROOT/frontend"
-npx ng build --configuration production
-
-DIST="$ROOT/frontend/dist/frontend/browser"
-[[ -d "$DIST" ]] || DIST="$ROOT/frontend/dist/frontend"
-
-echo "==> Subiendo dist a EC2…"
-"${SSH[@]}" 'sudo mkdir -p /var/www/nexotech && sudo chown ec2-user:ec2-user /var/www/nexotech'
-rsync -az -e "ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-  "$DIST"/ ec2-user@"$IP":/var/www/nexotech/
-
-echo "==> Instalando nginx + certbot…"
-"${SSH[@]}" 'sudo dnf install -y nginx certbot python3-certbot-nginx >/dev/null'
-
-"${SSH[@]}" "sudo tee /etc/nginx/conf.d/nexotech.conf >/dev/null" <<NGINX
-server {
-  listen 80;
-  server_name ${HOST} ${IP};
-  root /var/www/nexotech;
-  index index.html;
-
-  location / {
-    try_files \$uri \$uri/ /index.html;
-  }
-}
-NGINX
-
-"${SSH[@]}" 'sudo systemctl enable nginx && sudo systemctl restart nginx'
-
-echo "==> Certificado Let's Encrypt (sslip.io)…"
-"${SSH[@]}" "sudo certbot --nginx -d ${HOST} --non-interactive --agree-tos --register-unsafely-without-email --redirect || true"
-
-cat <<MSG
-
-Frontend:  ${FE_URL}
-API GW:    ${API_URL}
-
-Entra ID — agrega YA estas URIs en la app NexoTech Student:
-  Redirect URI (SPA):  ${FE_URL}/auth
-  Logout URI:          ${FE_URL}
-
-MSG
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REGION="${AWS_REGION:-us-east-1}"
+INSTANCE_ID="${INSTANCE_ID:-i-0e3ea93394a16686d}"
+BUCKET="${ARTIFACT_BUCKET:-nexotech-jars-7717}"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+STAGE="$ROOT/.run/frontend/$STAMP"
+mkdir -p "$STAGE"
+(cd "$ROOT/frontend" && npm exec --yes --package=node@24 -- node node_modules/@angular/cli/bin/ng.js build --configuration production)
+python3 - "$ROOT/frontend/dist/frontend/browser" "$STAGE/frontend.tar.gz" <<'PY'
+import sys,tarfile
+def normalize(info):
+    info.uid=info.gid=0
+    info.uname=info.gname='root'
+    return info
+with tarfile.open(sys.argv[2],'w:gz',format=tarfile.USTAR_FORMAT) as archive:
+    archive.add(sys.argv[1],arcname='.',filter=normalize)
+PY
+OBJECT="frontend/$STAMP/frontend.tar.gz"
+aws s3 cp "$STAGE/frontend.tar.gz" "s3://$BUCKET/$OBJECT" --sse AES256 --region "$REGION" --only-show-errors
+python3 - "$BUCKET" "$OBJECT" "$STAMP" "$REGION" > "$STAGE/parameters.json" <<'PY'
+import json,shlex,sys
+bucket,obj,stamp,region=sys.argv[1:]
+local='/opt/nexotech/frontend-'+stamp+'.tar.gz'
+commands=['set -eu','umask 077',
+ 'aws s3 cp '+shlex.quote('s3://'+bucket+'/'+obj)+' '+shlex.quote(local)+' --region '+shlex.quote(region)+' --only-show-errors',
+ 'cp -a /var/www/nexotech '+shlex.quote('/opt/nexotech/frontend-before-'+stamp),
+ 'tar -xzf '+shlex.quote(local)+' -C /var/www/nexotech',
+ 'chmod -R a+rX /var/www/nexotech',
+ 'curl -fsS http://127.0.0.1/web/index.html >/dev/null','echo FRONTEND_OK']
+print(json.dumps({'commands':['\n'.join(commands)]}))
+PY
+aws ssm send-command --region "$REGION" --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript \
+  --parameters "file://$STAGE/parameters.json" --query Command.CommandId --output text
+printf 'Web: https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/\n'
