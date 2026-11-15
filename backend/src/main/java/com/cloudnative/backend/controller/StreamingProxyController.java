@@ -25,6 +25,10 @@ public class StreamingProxyController {
   @GetMapping("/kafka/groups/{name}") public ResponseEntity<byte[]> group(@PathVariable String name,@AuthenticationPrincipal Jwt jwt){return forward(kafka,HttpMethod.GET,"/api/kafka/groups/"+name,null,jwt);}
   @GetMapping("/analytics/sales") public ResponseEntity<byte[]> sales(@AuthenticationPrincipal Jwt jwt){return forward(analytics,HttpMethod.GET,"/api/analytics/sales",null,jwt);}
   @GetMapping("/analytics/products") public ResponseEntity<byte[]> products(@AuthenticationPrincipal Jwt jwt){return forward(analytics,HttpMethod.GET,"/api/analytics/products",null,jwt);}
+  @PostMapping("/analytics/demo/invalid-order")
+  public ResponseEntity<byte[]> submitInvalidOrder(@AuthenticationPrincipal Jwt jwt) {
+    return forward(analytics, HttpMethod.POST, "/api/analytics/demo/invalid-order", null, jwt);
+  }
   private ResponseEntity<byte[]> forward(RestClient client,HttpMethod method,String path,byte[] body,Jwt jwt){
     var request=client.method(method).uri(path).header(HttpHeaders.AUTHORIZATION,"Bearer "+jwt.getTokenValue());
     if(body!=null)return request.contentType(MediaType.APPLICATION_JSON).body(body).exchange(this::response);

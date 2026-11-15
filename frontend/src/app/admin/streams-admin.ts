@@ -7,6 +7,7 @@ import { formatClp } from '../core/money';
 
 interface Topic { name: string; partitions: number; replicas: number; protectedTopic: boolean; }
 interface Sales { orderCount: number; revenue: number; units: number; currency: string; }
+interface DemoSubmission { eventId: string; topic: string; errorTopic: string; }
 interface Group { groupId: string; state: string; }
 @Component({
   selector: 'app-streams-admin',
@@ -23,6 +24,9 @@ export class StreamsAdmin implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly message = signal<string | null>(null);
   protected readonly busy = signal(false);
+  protected readonly demoRunning = signal(false);
+  protected readonly demo = signal<DemoSubmission | null>(null);
+  protected readonly demoError = signal<string | null>(null);
   protected readonly topicName = signal('demo.actividad');
   protected readonly retentionHours = signal(168);
   protected readonly formatClp = formatClp;
@@ -34,6 +38,21 @@ export class StreamsAdmin implements OnInit {
     this.http.get<Topic[]>(this.base+'/kafka/topics').subscribe({ next:v=>this.topics.set(v), error:e=>this.fail(e) });
     this.http.get<Group[]>(this.base+'/kafka/groups').subscribe({ next:v=>this.groups.set(v), error:e=>this.fail(e) });
     this.http.get<Sales>(this.base+'/analytics/sales').subscribe({ next:v=>this.sales.set(v), error:e=>this.fail(e) });
+  }
+  protected forceOrderError(): void {
+    this.demoRunning.set(true);
+    this.demo.set(null);
+    this.demoError.set(null);
+    this.http.post<DemoSubmission>(this.base + '/analytics/demo/invalid-order', null).subscribe({
+      next: result => {
+        this.demo.set(result);
+        this.demoRunning.set(false);
+      },
+      error: error => {
+        this.demoError.set(errorMessage(error, 'Kafka no confirmó el envío de la prueba'));
+        this.demoRunning.set(false);
+      },
+    });
   }
   protected create(): void {
     const name=this.topicName().trim();

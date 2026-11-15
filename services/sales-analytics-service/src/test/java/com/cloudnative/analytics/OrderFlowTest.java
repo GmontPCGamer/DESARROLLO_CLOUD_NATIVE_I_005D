@@ -28,6 +28,7 @@ class OrderFlowTest {
   @Autowired EmbeddedKafkaBroker broker;
   @Autowired JsonMapper mapper;
   @Autowired SalesProjection sales;
+  @Autowired com.cloudnative.analytics.web.AnalyticsController controller;
   @Test void twoPurchasesDuplicatesAndInvalidMessageAreHandled()throws Exception{
     var first=new OrderConfirmed("order-a",1L,new BigDecimal("1000"),"CLP",Instant.now(),List.of(new OrderConfirmed.Item(1L,2,new BigDecimal("500"))));
     var second=new OrderConfirmed("order-b",2L,new BigDecimal("750"),"CLP",Instant.now(),List.of(new OrderConfirmed.Item(2L,1,new BigDecimal("750"))));
@@ -35,14 +36,16 @@ class OrderFlowTest {
       broker.consumeFromAnEmbeddedTopic(dlt,OrderConfirmed.DLT);
       template.send(OrderConfirmed.TOPIC,"1",mapper.writeValueAsString(first)).get();
       template.send(OrderConfirmed.TOPIC,"1",mapper.writeValueAsString(first)).get();
-      template.send(OrderConfirmed.TOPIC,"1","{invalid").get();
+      var demo = controller.submitInvalidOrder();
       template.send(OrderConfirmed.TOPIC,"2",mapper.writeValueAsString(second)).get();
       await().atMost(Duration.ofSeconds(30)).untilAsserted(()->{
         assertThat(sales.summary().orderCount()).isEqualTo(2);
         assertThat(sales.summary().revenue()).isEqualByComparingTo("1750");
         assertThat(sales.summary().units()).isEqualTo(3);
       });
-      assertThat(KafkaTestUtils.getSingleRecord(dlt,OrderConfirmed.DLT,Duration.ofSeconds(30)).value()).isEqualTo("{invalid");
+      var rejected = KafkaTestUtils.getSingleRecord(dlt, demo.errorTopic(), Duration.ofSeconds(30));
+      assertThat(rejected.key()).isEqualTo(demo.eventId());
+      assertThat(mapper.readTree(rejected.value()).get("orderId").asText()).isEqualTo("formato-invalido");
       assertThat(sales.products()).hasSize(2);
     }
   }
