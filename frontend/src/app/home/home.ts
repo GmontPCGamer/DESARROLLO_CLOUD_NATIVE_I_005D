@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { StoreApi, errorMessage } from '../core/store.api';
-import { CATEGORIES, Product } from '../core/models';
+import { CATEGORIES, Offer, Product } from '../core/models';
 import { formatClp } from '../core/money';
 
 @Component({
@@ -13,6 +13,7 @@ export class Home implements OnInit {
   private readonly api = inject(StoreApi);
 
   protected readonly featured = signal<Product[]>([]);
+  protected readonly offers = signal<Offer[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly categories = CATEGORIES.filter((category) => category.id !== '');
@@ -20,6 +21,7 @@ export class Home implements OnInit {
   protected readonly skeletons = Array.from({ length: 8 }, (_, index) => index);
 
   ngOnInit(): void {
+    this.api.offers().subscribe({ next: (offers) => this.offers.set(offers), error: () => this.offers.set([]) });
     this.api.products().subscribe({
       next: (products) => {
         // Destacados: los de menor stock primero (novedades que se agotan) intercalados por categoría.
@@ -43,5 +45,9 @@ export class Home implements OnInit {
         this.error.set(errorMessage(err, 'No se pudo cargar el catálogo. ¿Están arriba los microservicios?'));
       },
     });
+  }
+
+  protected offerFor(productId: number): Offer | undefined {
+    return this.offers().find((offer) => offer.productId === productId);
   }
 }

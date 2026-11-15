@@ -3,9 +3,9 @@
 # =============================================================================
 
 locals {
-  backend_base = "http://${aws_eip.backend.public_ip}:8080"
+  backend_base    = "http://${aws_eip.backend.public_ip}:8080"
   frontend_origin = "https://${replace(aws_eip.backend.public_ip, ".", "-")}.sslip.io"
-  cors_origins = distinct(concat(var.cors_origenes, [local.frontend_origin]))
+  cors_origins    = distinct(concat(var.cors_origenes, [local.frontend_origin, "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com"]))
 }
 
 resource "aws_apigatewayv2_api" "api" {
@@ -28,9 +28,10 @@ resource "aws_apigatewayv2_authorizer" "jwt" {
   name             = "azuread-jwt"
 
   jwt_configuration {
-    issuer   = var.issuer_uri
+    issuer = var.issuer_uri
     audience = [
       var.audiencia,
+      "f7d7e5dd-430c-4adb-9348-9ecd974b220c",
       "api://nexotech-demo-api",
       "api://f7d7e5dd-430c-4adb-9348-9ecd974b220c",
     ]
@@ -90,4 +91,32 @@ resource "aws_apigatewayv2_stage" "dev" {
     throttling_burst_limit = 100
     throttling_rate_limit  = 50
   }
+}
+
+# Acceso HTTPS estable a la SPA y a dashboards con autenticación propia.
+resource "aws_apigatewayv2_integration" "web_assets" {
+  api_id                 = aws_apigatewayv2_api.api.id
+  integration_type       = "HTTP_PROXY"
+  integration_method     = "GET"
+  integration_uri        = "http://${aws_eip.backend.public_ip}:80/web/{proxy}"
+  payload_format_version = "1.0"
+}
+resource "aws_apigatewayv2_integration" "web_index" {
+  api_id                 = aws_apigatewayv2_api.api.id
+  integration_type       = "HTTP_PROXY"
+  integration_method     = "GET"
+  integration_uri        = "http://${aws_eip.backend.public_ip}:80/web/index.html"
+  payload_format_version = "1.0"
+}
+resource "aws_apigatewayv2_route" "web_assets" {
+  api_id             = aws_apigatewayv2_api.api.id
+  route_key          = "GET /web/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.web_assets.id}"
+  authorization_type = "NONE"
+}
+resource "aws_apigatewayv2_route" "web_index" {
+  api_id             = aws_apigatewayv2_api.api.id
+  route_key          = "GET /web"
+  target             = "integrations/${aws_apigatewayv2_integration.web_index.id}"
+  authorization_type = "NONE"
 }

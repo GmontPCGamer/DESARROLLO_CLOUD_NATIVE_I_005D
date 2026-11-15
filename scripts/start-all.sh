@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Levanta el BFF y los 8 microservicios de NexoTech en segundo plano.
+# Levanta el BFF y los 12 microservicios de NexoTech en segundo plano.
 #
 # Uso:
 #   scripts/start-all.sh                 # perfil local (JWT HS256 de desarrollo)
@@ -13,8 +13,7 @@
 #
 # Logs:  .run/logs/<servicio>.log     PIDs: .run/pids/<servicio>.pid
 #
-# RabbitMQ (avisos de compra): docker compose up -d rabbitmq
-#   consola http://localhost:15672  guest / guest
+# RabbitMQ (avisos): http://localhost:15672 · Kafka (eventos y ofertas): localhost:9092
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -42,16 +41,18 @@ detach() {
 export SPRING_PROFILES_ACTIVE="$PROFILE"
 export SPRING_RABBITMQ_HOST="${SPRING_RABBITMQ_HOST:-localhost}"
 export SPRING_RABBITMQ_PORT="${SPRING_RABBITMQ_PORT:-5672}"
-export SPRING_RABBITMQ_USERNAME="${SPRING_RABBITMQ_USERNAME:-guest}"
-export SPRING_RABBITMQ_PASSWORD="${SPRING_RABBITMQ_PASSWORD:-guest}"
+export SPRING_RABBITMQ_USERNAME="${SPRING_RABBITMQ_USERNAME:-nexotech}"
+export SPRING_RABBITMQ_PASSWORD="${SPRING_RABBITMQ_PASSWORD:-local-dev-only}"
+export SPRING_KAFKA_BOOTSTRAP_SERVERS="${SPRING_KAFKA_BOOTSTRAP_SERVERS:-localhost:19092,localhost:19094}"
 
-if ! lsof -iTCP:5672 -sTCP:LISTEN -P -n >/dev/null 2>&1; then
-  if command -v docker >/dev/null 2>&1; then
-    echo "Levantando RabbitMQ…"
-    docker compose -f "$ROOT/docker-compose.yml" up -d rabbitmq || echo "Aviso: no se pudo iniciar RabbitMQ"
-  else
-    echo "Aviso: RabbitMQ no está en localhost:5672. Los avisos de compra no se encolarán."
-  fi
+export APP_KAFKA_REPLICAS="${APP_KAFKA_REPLICAS:-2}"
+
+if [[ "${START_LOCAL_BROKERS:-true}" == "true" ]]; then
+  command -v docker >/dev/null 2>&1 || { echo "Docker no está disponible; configura START_LOCAL_BROKERS=false para brokers externos"; exit 1; }
+  echo "Levantando Kafka y RabbitMQ…"
+  docker compose -f "$ROOT/docker-compose.yml" up -d --wait --wait-timeout 120 zookeeper kafka1 kafka2 kafka-ui rabbitmq rabbitmq2
+else
+  echo "Usando brokers externos configurados por variables de entorno"
 fi
 if [[ "$PROFILE" == "azuread" ]]; then
   export AZURE_TENANT_ID="${AZURE_TENANT_ID:-72fd0b5a-8a6a-4cff-89f6-bde961f7e250}"
@@ -74,6 +75,9 @@ SERVICES=(
   "payment-service:services/payment-service:8086"
   "shipping-service:services/shipping-service:8087"
   "review-service:services/review-service:8088"
+  "offer-service:services/offer-service:8091"
+  "sales-analytics-service:services/sales-analytics-service:8092"
+  "kafka-admin-service:services/kafka-admin-service:8094"
   "rabbit-admin-service:services/rabbit-admin-service:8090"
   "backend:backend:8080"
 )
@@ -82,11 +86,17 @@ if [[ $BUILD -eq 1 ]]; then
   echo "Instalando contrato de mensajería…"
   (cd "$ROOT/services/messaging-contract" && mvn -q install)
   echo "Compilando (mvn -q -DskipTests package)…"
+  build_pids=()
   for entry in "${SERVICES[@]}"; do
     IFS=: read -r name dir _ <<<"$entry"
-    (cd "$ROOT/$dir" && mvn -q -DskipTests package) &
+    (cd "$ROOT/$dir" && mvn -q package) &
+    build_pids+=("$!")
   done
-  wait
+  build_failed=0
+  for build_pid in "${build_pids[@]}"; do
+    wait "$build_pid" || build_failed=1
+  done
+  [[ "$build_failed" -eq 0 ]] || { echo "Falló la compilación o las pruebas"; exit 1; }
 fi
 
 for entry in "${SERVICES[@]}"; do
@@ -110,6 +120,7 @@ for entry in "${SERVICES[@]}"; do
   echo "· $name → :$port (pid $pid)"
 done
 
+failed=0
 echo "Esperando health checks…"
 for entry in "${SERVICES[@]}"; do
   IFS=: read -r name _ port <<<"$entry"
@@ -120,11 +131,14 @@ for entry in "${SERVICES[@]}"; do
     fi
     sleep 1
   done
+  failed=1
   echo "  ✘ $name (:$port) no respondió; revisa .run/logs/$name.log"
 done
+
+[[ "$failed" -eq 0 ]] || exit 1
 
 cat <<EOF
 
 Listo. BFF en http://localhost:8080/api · Frontend: (cd frontend && npm start) → http://localhost:4200
-Detener todo: scripts/stop-all.sh
+Ofertas Kafka: http://localhost:8080/api/public/offers · detener servicios Java: scripts/stop-all.sh
 EOF

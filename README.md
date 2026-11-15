@@ -1,496 +1,146 @@
-# NexoTech — DESARROLLO_CLOUD_NATIVE_I_005D
+# NexoTech
 
-Tienda cloud-native de demostración para la asignatura **Desarrollo Cloud Native I (005D)**.
+Tienda de tecnología desarrollada para **Desarrollo Cloud Native I (005D)**. Incluye catálogo público, inventario, carrito, compras con pago simulado, cotización de despacho, reseñas, notificaciones y administración. RabbitMQ mueve las tareas operativas de la tienda y Kafka procesa eventos para ofertas y análisis de ventas.
 
-Flujo real en producción (demo):
+- [Abrir la demo en AWS](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/)
+- [API pública de salud](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/health)
+- [Ofertas generadas a partir de reseñas](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/offers)
+- [Cambios de la integración EP3](https://github.com/GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D/pull/1)
 
-**Angular + MSAL** → **Microsoft Entra ID** → **AWS API Gateway (JWT Authorizer)** → **BFF Spring Boot** → **8 microservicios** + **rabbit-admin**
+## Arquitectura
 
-Tras confirmar una compra, `order-service` publica el mismo evento en **tres colas** de RabbitMQ (avisos, despacho y captura del pago). Cada cola tiene su exchange direct, su binding y su DLQ.
+La interfaz Angular 22 se sirve desde nginx en EC2. AWS API Gateway HTTP v2 proporciona HTTPS y enruta `/dev/web/` hacia la interfaz y `/dev/api/` hacia el backend. El backend actúa como fachada (BFF) para 12 microservicios Spring Boot 4. El catálogo y las ofertas se pueden consultar sin sesión. Las compras, reseñas nuevas y notificaciones requieren una cuenta autorizada en el tenant Duoc de Microsoft Entra ID.
 
-Documentación ampliada de negocio y diseño: [CONTEXTO_PROYECTO.md](CONTEXTO_PROYECTO.md) · Guión de presentación: [GUIÓN_PRESENTACIÓN_EP2.md](GUIÓN_PRESENTACIÓN_EP2.md) · Entra: [MICROSOFT_ENTRA_CONFIG.md](MICROSOFT_ENTRA_CONFIG.md)
+Angular usa MSAL con el flujo de código de autorización y PKCE. Envía el token Bearer al invocar rutas protegidas. API Gateway valida el JWT y el BFF verifica el acceso a la API de la aplicación. Las rutas de administración requieren `ROLE_ADMIN`; las cuentas autorizadas se configuran mediante `APP_ADMIN_USERS`. La aplicación desplegada pide el scope `api://nexotech-demo-api/access_as_user` y vuelve a [la ruta de autenticación](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/auth).
 
----
-
-## Estado actual (12 de octubre de 2026)
-
-La demo **está desplegada en AWS Academy** (`us-east-1`).  
-Login contra el tenant Entra **Duoc** (single-tenant → sin “Approval required”).
-
-El laboratorio puede reiniciar las EC2 sin cambios en el código. En ese caso **nginx vuelve solo**; Java, los contenedores de RabbitMQ y `cloudflared` no, porque se lanzaron a mano. La IP pública de RabbitMQ tampoco es fija (la de la aplicación sí: `18.211.7.130`). H2 se vacía al reiniciar: el catálogo se vuelve a cargar, el carrito y los pedidos no. Conviene repetir los smoke checks el día de la presentación.
-
-| Qué | URL / valor |
-|-----|-------------|
-| **Frontend (HTTPS, demo)** | https://addition-shopping-study-lean.trycloudflare.com |
-| **API Gateway (stage `dev`)** | https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev |
-| **BFF directo (debug)** | http://18.211.7.130:8080 |
-| EC2 aplicación (BFF + 8 MS + rabbit-admin + nginx) | `i-0e3ea93394a16686d` · EIP `18.211.7.130` |
-| **EC2 RabbitMQ (cluster 2 nodos)** | `i-0f8aae5246e5e7513` · consolas http://52.87.249.149:15672 y :15673 |
-| Usuario del broker | `nexotech` (clave: `terraform output -raw rabbitmq_password`) |
-| **Cuenta administrador (app)** | `fe.ardiles@duocuc.cl` → menú **Administración** (`ROLE_ADMIN`) |
-| Tenant Entra | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
-| App registration | **NexoTech Demo SPA** · client ID `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
-
-> **URL pública a usar:** el tunnel de Cloudflare. En redes con filtro (p. ej. Duoc) `*.sslip.io` responde *Web Filter Violation* (403). El tunnel apunta a nginx en la EC2.
->
-> Si se reinicia el lab o muere `cloudflared`, la URL `*.trycloudflare.com` cambia y no se puede recuperar. Hay que generar otra, actualizar los redirects de Entra, `environment.ts`, el CORS del API Gateway y volver a publicar la SPA. La consola de RabbitMQ también cambia de IP. Tras la presentación: `cd terraform && terraform destroy`.
-
-### Smoke checks rápidos
-
-```bash
-# Catálogo público → 200
-curl -s "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/products" | head -c 120
-
-# Privado sin token → 401
-curl -si "https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me" | head -n 1
-
-# Frontend (tunnel) → 200
-curl -sI "https://addition-shopping-study-lean.trycloudflare.com/" | head -n 1
-```
-
----
-
-## 1. Qué es el proyecto (visión general)
-
-NexoTech es una tienda de hardware (celulares, notebooks, consolas, etc.) pensada para **demostrar identidad + API Management + microservicios**, no para producción comercial.
-
-- Catálogo **público** (sin sesión).
-- Carrito, compras, avisos, perfil y admin **con login Microsoft**.
-- Pago **simulado** (sin pasarela real).
-- Persistencia **H2 en memoria** en la demo cloud (sin RDS, para ahorrar créditos).
-- Tres capas de seguridad JWT: **Entra firma** → **API Gateway filtra** → **BFF/MS validan de nuevo**.
-
-### Quién puede iniciar sesión
-
-- Cualquier cuenta **`@duocuc.cl`** del tenant Duoc (login institucional).
-- La app está registrada **en el tenant Duoc** (single-tenant) para login rápido, sin pedir aprobación de admin.
-- **Administrador de la aplicación** (menú Administración): solo **`fe.ardiles@duocuc.cl`**.
-- Primera vez: puede pedir **aceptar permisos** (consentimiento de usuario); hay que aceptar.
-
----
-
-## 2. Arquitectura
-
-```
-Usuario
-  │
-  ▼
-┌─────────────────────────────────────┐
-│  SPA Angular (nginx + HTTPS)        │
-│  MSAL: loginRedirect + PKCE         │
-│  MsalGuard / MsalInterceptor        │
-└──────────────┬──────────────────────┘
-               │ login
-               ▼
-┌─────────────────────────────────────┐
-│  Microsoft Entra ID (Duoc)          │
-│  App: NexoTech Demo SPA             │
-│  Scope: api://nexotech-demo-api/    │
-│         access_as_user              │
-└──────────────┬──────────────────────┘
-               │ access_token (JWT)
-               ▼
-┌─────────────────────────────────────┐
-│  AWS API Gateway HTTP v2            │
-│  • GET /api/public/{proxy+}  (sin JWT)
-│  • OPTIONS /{proxy+}         (CORS)
-│  • ANY /{proxy+}             (JWT Authorizer)
-└──────────────┬──────────────────────┘
-               │ proxy HTTP
-               ▼
-┌─────────────────────────────────────┐
-│  EC2 app — BFF Spring Boot :8080    │
-│  OAuth2 Resource Server (azuread)   │
-└──────────────┬──────────────────────┘
-               │ HTTP
-     ┌─────────┼─────────┬──────────┐
-     ▼         ▼         ▼          ▼
-  :8081     :8082     :8083 …    :8088
- catálogo   carrito   órdenes    reseñas
-            …inventario, pago, despacho, avisos
-
-  order-service publica en 3 exchanges direct (cada cola tiene DLX + DLQ):
-    notification.user  → nexotech.notifications
-    shipment.create    → nexotech.shipments      → seguimiento NX{id}
-    payment.capture    → nexotech.payments       → AUTHORIZED → CAPTURED
-  review y shipping republican el aviso en notification.user
-
-  rabbit-admin-service :8090
-    el BFF lo expone en /api/admin/rabbit (solo ROLE_ADMIN)
-```
-
-### Por qué el frontend está en la EC2 (+ tunnel)
-
-AWS Academy **restringe** CloudFront y ciertas operaciones S3 desde Terraform. La SPA se sirve con **nginx + Let’s Encrypt** en la misma EC2 (`sslip.io` sobre la Elastic IP).
-
-Para redes que bloquean `sslip.io`, la demo pública sale por **Cloudflare Tunnel** (`cloudflared` en la EC2 → `*.trycloudflare.com`), sin cambiar el origen nginx.
-
----
-
-## 3. Stack y estructura del repo
-
-| Capa | Tecnología | Carpeta |
-|------|------------|---------|
-| Frontend | Angular 22 (standalone) + MSAL | `frontend/` |
-| BFF | Spring Boot 4 + OAuth2 Resource Server | `backend/` |
-| Microservicios | Spring Boot 4 (8 de tienda + `rabbit-admin-service`) | `services/*-service/` |
-| Nombres de colas | Una sola clase, sin repetir los textos | `services/messaging-contract/` |
-| Mensajería | RabbitMQ 4.2 en cluster de 2 nodos + Spring AMQP (`RabbitAdmin`, listener container, ACK manual, DLX/DLQ) | `rabbitmq/docker-compose.yml`, `terraform/rabbitmq.tf` |
-| Infra | Terraform (API GW + 2 EC2 + EIP + SG) | `terraform/` |
-| Deploy | Scripts bash (local + EC2) | `scripts/` |
-
-| Servicio | Puerto | Responsabilidad |
-|----------|--------|-----------------|
-| `backend` (BFF) | 8080 | Agregación, authz, `/api/me`, admin |
-| `catalog-service` | 8081 | Productos y stock base |
+| Proceso | Puerto | Responsabilidad |
+| --- | ---: | --- |
+| `backend` | 8080 | BFF, seguridad y llamadas a los microservicios |
+| `catalog-service` | 8081 | Catálogo y stock visible |
 | `cart-service` | 8082 | Carrito por usuario |
-| `order-service` | 8083 | Checkout. Reserva stock por HTTP y publica en los 3 exchanges |
-| `notification-service` | 8084 | Avisos. Consume `nexotech.notifications` (`notification.user`) |
-| `inventory-service` | 8085 | Reservas de inventario (HTTP, síncrono) |
-| `payment-service` | 8086 | Autoriza el pago por HTTP y lo captura al consumir `payment.capture` |
-| `shipping-service` | 8087 | Cotiza por HTTP. Al consumir `shipment.create` crea `NX{id}` y republica el aviso |
-| `review-service` | 8088 | Reseñas. Al publicar una, envía el aviso por `notification.user` |
-| `rabbit-admin-service` | 8090 | Crea y borra colas, exchanges y bindings. No es público; el BFF lo proxea |
+| `order-service` | 8083 | Confirmación de pedidos y publicación en RabbitMQ y Kafka |
+| `notification-service` | 8084 | Consumo y consulta de avisos |
+| `inventory-service` | 8085 | Reserva y reposición de inventario |
+| `payment-service` | 8086 | Autorización y captura de pagos simulados |
+| `shipping-service` | 8087 | Cotización y registro de despachos |
+| `review-service` | 8088 | Reseñas y publicación en RabbitMQ y Kafka |
+| `rabbit-admin-service` | 8090 | Consulta y gestión de colas, exchanges y bindings por el BFF |
+| `offer-service` | 8091 | Proyección de ofertas a partir de reseñas |
+| `sales-analytics-service` | 8092 | Proyección persistente de ventas y unidades |
+| `kafka-admin-service` | 8094 | Gestión de topics e inspección de grupos de consumidores |
 
-Rutas Angular relevantes:
+## Mensajería
 
-| Ruta | Acceso |
-|------|--------|
-| `/`, `/catalogo`, `/catalogo/:id` | Públicas |
-| `/auth` | Callback MSAL |
-| `/carrito`, `/compras`, `/notificaciones`, `/perfil` | `MsalGuard` |
-| `/admin` | `MsalGuard` + `ROLE_ADMIN` en BFF |
-| `/acceso-denegado` | Login cancelado / fallido |
+### RabbitMQ
 
----
+Tras confirmar un pedido, se publican mensajes para los tres flujos operativos. Las reseñas y los despachos también generan avisos. Las colas tienen exchanges directos y rutas de mensajes fallidos (DLX y DLQ). Los consumidores confirman el procesamiento con ACK.
 
-## 4. Microsoft Entra ID (cómo está configurado ahora)
+| Cola | Routing key | Resultado |
+| --- | --- | --- |
+| `nexotech.notifications` | `notification.user` | Aviso para el usuario |
+| `nexotech.payments` | `payment.capture` | Captura de pago simulado |
+| `nexotech.shipments` | `shipment.create` | Despacho registrado |
 
-Valores de la **demo cloud** (`frontend/src/environments/environment.ts`):
+### Kafka
 
-| Parámetro | Valor |
-|-----------|--------|
-| Tenant | `72fd0b5a-8a6a-4cff-89f6-bde961f7e250` (Duoc) |
-| Client ID (SPA+API) | `f7d7e5dd-430c-4adb-9348-9ecd974b220c` |
-| Authority | `https://login.microsoftonline.com/72fd0b5a-8a6a-4cff-89f6-bde961f7e250` |
-| API URI / scope | `api://nexotech-demo-api/access_as_user` |
-| Redirect URI | `https://addition-shopping-study-lean.trycloudflare.com/auth` |
-| Logout URI | `https://addition-shopping-study-lean.trycloudflare.com` |
+El clúster usa ZooKeeper y dos brokers. Cada topic de negocio tiene tres particiones y dos réplicas en el despliegue. Los consumidores reintentan fallos y derivan mensajes inválidos a los topics `.DLT` correspondientes.
 
-Notas importantes:
+| Topic | Productor | Consumidor | Entrada y salida |
+| --- | --- | --- | --- |
+| `nexotech.review-created` | `review-service` | `offer-service` | Evento con ID, producto y valoración → producto destacado con conteo de reseñas en `/api/public/offers` |
+| `nexotech.order-confirmed` | `order-service` | `sales-analytics-service` | Evento con ID, pedido, total e ítems → compras procesadas, ventas y unidades en `/api/admin/analytics/sales` |
 
-- Flujo **Authorization Code + PKCE** (sin client secret en Angular).
-- App registration en tenant **Duoc** (single-tenant) → evita “Approval required” de apps multi-tenant unverified.
-- API Gateway valida issuer Duoc + audiencias `f7d7e5dd-…` / `api://nexotech-demo-api`.
-- CORS incluye el origen del tunnel Cloudflare.
-- Admin de negocio: `APP_ADMIN_USERS=fe.ardiles@duocuc.cl`.
+Los [contratos JSON](services/messaging-contract/src/main/resources/schemas/) incluyen los eventos de entrada y las respuestas de ofertas y analítica. El módulo [messaging-contract](services/messaging-contract/) también contiene los nombres de la topología de RabbitMQ y los tipos de evento de Kafka.
 
-Para desarrollo local, usa `environment.development.ts` (localhost + scope `nexotech-student-api` si esa app tiene redirect `http://localhost:4200/auth`).
+Ofertas reconstruye su proyección desde el historial retenido al arrancar. Analítica usa el grupo estable `sales-analytics-v1` y guarda la proyección y los identificadores procesados en H2 en disco para mantener los totales y evitar duplicados tras reinicios. El panel **Administración → Eventos y ventas** muestra la analítica, las particiones y réplicas, la configuración de topics y los grupos de consumidores. Permite probar creación, cambios de retención o particiones y eliminación con topics `demo.*`.
 
----
+## Ejecución local
 
-## 5. AWS (cómo está montado)
-
-Definido en Terraform (`terraform/`):
-
-1. **API Gateway HTTP v2** con CORS hacia el tunnel Cloudflare, sslip.io y localhost.
-2. **JWT Authorizer** contra issuer Entra v2 y audiencias de la Demo SPA.
-3. **Rutas**
-   - `GET /api/public/{proxy+}` → sin JWT (catálogo anónimo).
-   - `OPTIONS /{proxy+}` → sin JWT (preflight CORS).
-   - `ANY /{proxy+}` → JWT obligatorio.
-4. **EC2 de aplicación** `t3.medium` + Elastic IP + security group (22/80/443/8080). Ahí corren el BFF, los 8 microservicios, `rabbit-admin-service`, nginx (`127.0.0.1:8089`) y `cloudflared`.
-5. **EC2 de RabbitMQ** `t3.small` (`terraform/rabbitmq.tf` + `rabbitmq/docker-compose.yml`). Cluster de 2 nodos. AMQP `5672` y `5673` solo desde la EC2 de la aplicación. Consolas `15672` y `15673`.
-6. Los jars se publican por S3 + SSM. Los servicios leen `SPRING_RABBITMQ_ADDRESSES` (IP privada `:5672` y `:5673`), `USERNAME` y `PASSWORD`.
-
-Outputs útiles:
+Requisitos recomendados para esta versión: Java 17, Maven, Node.js 24 compatible con Angular 22, npm, Python 3 y Docker con Compose.
 
 ```bash
-cd terraform
-terraform output
-# frontend_url, url_deploy, ec2_public_ip, ec2_instance_id, …
+bash scripts/start-all.sh local
+python3 scripts/smoke-messaging.py --all-flows --restart-offers --restart-analytics
 ```
 
----
+El script levanta ambos brokers Kafka, ZooKeeper, Kafka UI y los dos nodos RabbitMQ, instala el contrato compartido, compila con pruebas y arranca los 13 procesos. El perfil `local` acepta JWT de desarrollo y el script de prueba genera su propio token. Para iniciar sesión desde Angular con Microsoft, usa `bash scripts/start-all.sh azuread` con una cuenta Duoc autorizada y el retorno de desarrollo registrado en Entra.
 
-## 6. Cómo levantar en local
-
-### Requisitos
-
-- Node.js ≥ 22, npm  
-- Java 17, Maven Wrapper (`./mvnw` / `./mvnw.cmd`)  
-- Docker (RabbitMQ local)  
-- (Opcional) Terraform ≥ 1.6, AWS CLI, cuenta AWS Academy  
-
-### 6.1 Backend + microservicios
-
-RabbitMQ tiene que estar arriba antes del checkout. `scripts/start-all.sh` lo levanta con Docker si el puerto 5672 está libre.
-
-```bash
-docker compose up -d rabbitmq
-# consola: http://localhost:15672  (guest / guest)
-# colas: nexotech.notifications, nexotech.shipments, nexotech.payments
-# cada una: exchange propio, routing key, DLX y DLQ
-# cluster EC2: rabbitmq/docker-compose.yml (puertos 5672/5673 y 15672/15673)
-```
-
-Al confirmar una compra, `order-service` publica en tres exchanges: `notification.user`, `shipment.create` y `payment.capture`. Cada cola principal tiene su DLX y su DLQ. El despacho crea el seguimiento `NX{id}` y el pago pasa de `AUTHORIZED` a `CAPTURED`. Una reseña republica el aviso por `notification.user`. La reserva de stock sigue por HTTP, porque el checkout tiene que saber al instante si hay unidades y compensar si algo falla.
-
-| Cola | Exchange | Routing key | DLX | DLQ |
-|------|----------|-------------|-----|-----|
-| `nexotech.notifications` | `nexotech.notifications.exchange` | `notification.user` | `nexotech.notifications.dlx` | `nexotech.notifications.dlq` |
-| `nexotech.shipments` | `nexotech.shipments.exchange` | `shipment.create` | `nexotech.shipments.dlx` | `nexotech.shipments.dlq` |
-| `nexotech.payments` | `nexotech.payments.exchange` | `payment.capture` | `nexotech.payments.dlx` | `nexotech.payments.dlq` |
-
-En la EC2 el broker es un cluster de dos nodos (`rabbit@rabbit1` y `rabbit@rabbit2`) levantado con `rabbitmq/docker-compose.yml`. AMQP en `172.31.82.2:5672` y `:5673`. Consolas: http://52.87.249.149:15672 y http://52.87.249.149:15673. Los tres exchanges de la tienda son **direct** (la clave tiene que coincidir exacta: `notification.user`, `shipment.create`, `payment.capture`).
-
-Los nombres están solo en `services/messaging-contract/src/main/java/com/cloudnative/messaging/MessagingNames.java`. Cada servicio los reexporta; hay que instalar ese módulo (`mvn install`) antes de empaquetar los demás. `scripts/start-all.sh` lo hace cuando compila. Spring declara la topología con `RabbitAdmin`. Los consumidores confirman a mano: ACK si el mensaje se procesó, NACK con requeue una vez si el error es recuperable, y NACK sin requeue (cae en la DLQ y queda en el log) si el mensaje es inválido o el reintento ya se usó. Un JSON que no se puede convertir ni entra al listener: el contenedor lo rechaza hacia la DLQ.
-
-`rabbit-admin-service` (`:8090`) expone la API de administración. El BFF la publica solo para `ROLE_ADMIN`:
-
-| Acción | Ruta |
-|--------|------|
-| Crear cola | `POST /api/admin/rabbit/queues` |
-| Borrar cola | `DELETE /api/admin/rabbit/queues/{name}` |
-| Crear exchange | `POST /api/admin/rabbit/exchanges` |
-| Borrar exchange | `DELETE /api/admin/rabbit/exchanges/{name}` |
-| Crear binding | `POST /api/admin/rabbit/bindings` |
-| Borrar binding | `DELETE /api/admin/rabbit/bindings` |
-
-Un nombre vacío o con caracteres no permitidos responde 400. No se pueden borrar los 12 recursos de `MessagingNames.storeTopology()` (colas, exchanges, DLX y DLQ de la tienda) ni un exchange `amq.*`. Crear un exchange acepta `direct`, `topic`, `fanout` o `headers`; la topología de la compra sigue siendo direct. Sin token, estas rutas responden 401.
-
-En la nube el broker es la EC2 de RabbitMQ. En local Docker usa `guest` / `guest`.
-
-### 6.2 Servicios Spring
-
-```bash
-# Perfil local (JWT HS256 de desarrollo, sin Entra)
-scripts/start-all.sh
-
-# Perfil azuread (valida JWTs reales de Entra)
-scripts/start-all.sh azuread
-
-scripts/stop-all.sh   # logs en .run/logs/
-```
-
-Variables típicas para `azuread` (no commitear secretos):
-
-```bash
-export SPRING_PROFILES_ACTIVE=azuread
-export AZURE_TENANT_ID=72fd0b5a-8a6a-4cff-89f6-bde961f7e250
-export AZURE_API_AUDIENCE=f7d7e5dd-430c-4adb-9348-9ecd974b220c,api://nexotech-demo-api
-export APP_ADMIN_USERS=fe.ardiles@duocuc.cl
-export APP_CORS_ORIGINS=http://localhost:4200
-```
-
-Pruebas:
-
-```bash
-curl http://localhost:8080/api/public/products
-curl -i http://localhost:8080/api/me          # → 401 sin token
-```
-
-### 6.3 Frontend
+En otra terminal:
 
 ```bash
 cd frontend
-npm install
-npm start    # http://localhost:4200
+npm ci
+npm start
 ```
 
-Ajusta `frontend/src/environments/environment.development.ts` si cambias clientId / scope / redirects.
+- [Frontend local](http://localhost:4200/)
+- [BFF local](http://localhost:8080/api/public/health)
+- [Kafka UI local](http://localhost:8093/dev/kafka/)
+- [RabbitMQ Management local](http://localhost:15672/)
 
-### 6.4 Build de producción (SPA)
+Docker Compose define los usuarios de desarrollo de los dashboards y sus variables de entorno. Mantén las credenciales de AWS, Entra y los brokers de la nube en sus mecanismos de configuración privados. Los logs locales quedan en `.run/logs/`.
 
 ```bash
-cd frontend
-npm run build -- --configuration=production
-# salida: frontend/dist/frontend/browser
+bash scripts/stop-all.sh
+docker compose down
 ```
 
----
-
-## 7. Cómo desplegar / actualizar en AWS
-
-Orden típico:
+Para ejecutar las pruebas Maven por separado:
 
 ```bash
-# 1) Infra
-cd terraform
-terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
-
-# 2) Compilar jars (backend + services)
-# 3) Subir y arrancar en EC2
-../scripts/deploy-ec2.sh
-
-# 4) La SPA de la demo NO sale de deploy-frontend.sh:
-#    ese script reescribe environment.ts con el client ID antiguo
-#    (097bfd84 / nexotech-student-api) y el dominio sslip.io.
-#    El build vigente usa environment.ts (client f7d7e5dd y el tunnel Cloudflare)
-#    y se publica en /var/www/nexotech, servido por nginx en 127.0.0.1:8089.
+mvn -q -f services/messaging-contract/pom.xml install
+for service in review offer order sales-analytics kafka-admin; do
+  mvn -q -f "services/${service}-service/pom.xml" test || exit 1
+done
 ```
 
-En Academy, si SSH con `vockey.pem` falla, el despliegue se hace con **AWS Systems Manager (SSM)** + bucket S3 auxiliar para jars/SPA.
+## Despliegue en AWS Academy
 
-Tras cambiar IP o dominio:
+La demo corre en `us-east-1`. La EC2 de aplicación es una `t3.large` de 8 GB con nginx, 13 procesos administrados por systemd y el clúster Kafka con Kafka UI en Docker. RabbitMQ corre en una EC2 separada con dos nodos. La configuración de infraestructura, incluyendo el API Gateway, el stage `dev` y la Elastic IP, está en [terraform/](terraform/).
 
-1. Actualiza redirects SPA en Entra.  
-2. Actualiza `environment.ts` (`redirectUri`, `backendApiUrl`).  
-3. Rebuild + redeploy frontend.  
-4. Revisa `APP_CORS_ORIGINS` en la EC2.
-
-Para apagar costos:
+Para actualizar una instalación existente, genera los JAR con Maven y compila el frontend con `npm ci` y `npm run build` desde `frontend/`. Luego ejecuta, desde la raíz y con una sesión AWS válida:
 
 ```bash
-cd terraform && terraform destroy
+INSTANCE_ID='id-de-la-ec2' ARTIFACT_BUCKET='nombre-del-bucket-privado' bash scripts/deploy-ssm.sh
 ```
 
----
+El script envía el paquete al bucket privado y entrega un ID de comando de Systems Manager para consultar el resultado. La instalación conserva las releases anteriores y la configuración de la instancia. Para actualizar solo la interfaz, usa `bash scripts/deploy-frontend.sh`. Si cambia la infraestructura pública, `scripts/configure-public-cloud.py` actualiza rutas, CORS y el retorno de Entra con AWS CLI y Azure CLI.
 
-## 8. Flujo de autenticación (detalle)
+### Estabilidad del enlace público
 
-```
-1. Usuario → SPA → MSAL loginRedirect (prompt select_account)
-2. Entra autentica (PKCE) y redirige a /auth
-3. MSAL guarda sesión y obtiene access_token para api://nexotech-demo-api/access_as_user
-4. MsalInterceptor agrega Authorization: Bearer <JWT> a las llamadas al API
-5. API Gateway valida firma (JWKS), issuer y audience
-6. BFF (y cada MS con perfil azuread) vuelve a validar el JWT
-7. BFF orquesta carrito / checkout / notificaciones, etc.
-```
+El enlace HTTPS **se mantiene al detener, iniciar o reiniciar la EC2**. El dominio lo identifica el ID de API Gateway `ourd5f7qr1`, y la ruta usa el stage `dev` y `/web/`. Durante el apagado o mientras se levantan los servicios, la misma dirección puede quedar temporalmente inaccesible. Una API nueva tendría otro ID. Cambiar el nombre del stage o la ruta también cambia el enlace que se comparte. [Stages de HTTP API en AWS](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-stages.html)
 
-| Caso | HTTP esperado |
-|------|----------------|
-| `GET /api/public/products` sin token | **200** |
-| `GET /api/me` sin token | **401** |
-| Token basura | **401** |
-| Token MSAL válido | **200** |
-| `/api/admin/**` sin admin | **403** |
+API Gateway llega a nginx y al BFF mediante la **Elastic IP** de la EC2. Esa IP es estática mientras siga asignada a la cuenta. Si se reemplaza la instancia, se puede asociar la misma Elastic IP a la nueva EC2 y mantener el enlace público, siempre que se conserven la API, el stage y las rutas. Si se usa otra IP, hay que actualizar las integraciones de API Gateway. [Elastic IP en AWS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html)
 
----
+### Monitoreo y comprobaciones
 
-## 9. Cumplimiento rúbrica EP2 (resumen)
-
-Peso del curso (guión): **MSAL 60% · BFF / API Gateway 40%**.
-
-| Indicador | Evidencia en este repo / demo |
-|-----------|-------------------------------|
-| MSAL configurado | `frontend/src/app/auth/` + environments |
-| Login / logout real | Botón en la SPA desplegada |
-| `MsalGuard` / `MsalInterceptor` / `/auth` | Rutas privadas + Bearer en Network |
-| Scope propio | `access_as_user` |
-| BFF Resource Server | Perfil `azuread`, iss/aud/firma/exp |
-| 401 / 403 / 200 | Demostrable vía Gateway o BFF |
-| API Manager (Gateway) | Terraform aplicado: rutas + JWT + CORS |
-| FE + BE en cloud | tunnel Cloudflare → EC2/nginx + execute-api |
-
----
-
-## 10. Guía de demostración en portales + guión (~10 min)
-
-### 10.1 Antes de empezar (checklist)
-
-- [ ] Lab AWS Academy **activo** + `aws configure` vigente  
-- [ ] Abrir SPA: https://addition-shopping-study-lean.trycloudflare.com  
-- [ ] Consolas RabbitMQ: http://52.87.249.149:15672 y :15673 (usuario `nexotech`; si no cargan, la EC2 se reinició y la IP pública cambió)  
-- [ ] Portal Azure en directorio **Duoc UC** (`72fd0b5a-…`)  
-- [ ] Consola AWS región **us-east-1**  
-- [ ] Terminal con los curls 200/401 listos  
-- [ ] Login de prueba: **`fe.ardiles@duocuc.cl`** (admin de la app)  
-- [ ] Una compra de prueba: las tres colas bajan a 0; `nexotech.notifications.dlq` conserva los mensajes rechazados  
-
-### 10.2 Dónde está cada cosa en Azure (Entra)
-
-1. https://portal.azure.com → avatar → **Switch directory** → **Duoc UC** (o el directorio institucional).  
-2. Busca **Microsoft Entra ID**.
-
-| Pantalla | Qué mostrar | Qué decir |
-|----------|-------------|-----------|
-| **Overview** | Tenant ID `72fd0b5a-…` | “Directorio Duoc: usuarios `@duocuc.cl`” |
-| **App registrations** → **NexoTech Demo SPA** | Client ID `f7d7e5dd-…` | “Registro de la SPA + API (single-tenant)” |
-| **Authentication** | Redirect `…trycloudflare.com/auth` | “SPA + PKCE, sin client secret” |
-| **Expose an API** | URI `api://nexotech-demo-api`, scope `access_as_user` | “Scope que pide MSAL” |
-| **API permissions** | Permiso delegado al scope | “La app pide acceso a su propia API” |
-
-En la SPA (otra pestaña): **Iniciar sesión** → pantalla Microsoft → volver logueado → DevTools Network → `Authorization: Bearer` → pegar en https://jwt.ms → mostrar `iss` / `aud` / `preferred_username`.
-
-### 10.3 Dónde está cada cosa en AWS (API Manager + runtime)
-
-Consola: región **N. Virginia (us-east-1)**.
-
-| Servicio | Ruta en consola | Qué señalar |
-|----------|-----------------|-------------|
-| **API Gateway** (= API Manager) | API Gateway → HTTP APIs → `nexotech-005d-api` (`ourd5f7qr1`) | Rutas, authorizer, CORS, stage `dev` |
-| **Routes** | Dentro de la API → Routes | `GET /api/public/{proxy+}` sin auth; `ANY /{proxy+}` con JWT; `OPTIONS` sin auth |
-| **Authorizers** | Authorization → `azuread-jwt` | Issuer = tenant Duoc; audiences = clientId + `api://nexotech-demo-api` |
-| **Integrations** | Integrations | Proxy a `http://18.211.7.130:8080` (BFF) |
-| **EC2 aplicación** | EC2 → Instances → `i-0e3ea93394a16686d` | BFF + 8 MS + rabbit-admin + nginx + cloudflared |
-| **EC2 RabbitMQ** | EC2 → Instances → `i-0f8aae5246e5e7513` | Cluster 2 nodos. Consolas :15672 y :15673 |
-| **Elastic IP** | Elastic IPs → `18.211.7.130` | IP fija de la aplicación |
-| **Security Group** | de cada instancia | App: 80, 443, 8080, 22. RabbitMQ: 5672/5673 solo desde la app, 15672/15673 públicos |
-| **S3** (opcional) | bucket `nexotech-jars-7717` | jars y zip de la SPA |
-| **Terraform** (repo) | `terraform/main.tf`, `ec2.tf`, `rabbitmq.tf` | “Infra como código” |
-
-Curls en vivo (API Manager):
+Abre los dashboards de AWS mediante Systems Manager con una sesión AWS autorizada. Deja el comando ejecutándose mientras los usas:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-  https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/products   # 200
-
-curl -s -o /dev/null -w "%{http_code}\n" \
-  https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/me                 # 401
+bash scripts/start-monitoring-tunnels.sh
 ```
 
-### 10.4 Guión hablado (sugerido)
-
-| Min | Bloque | Acción en pantalla |
-|-----|--------|-------------------|
-| 0:00–0:40 | Contexto | Diagrama README: SPA → Entra → Gateway → BFF → 8 MS |
-| 0:40–3:30 | **MSAL 60%** | SPA tunnel → login → Network Bearer → jwt.ms → perfil/admin |
-| 3:30–5:00 | **Entra visual** | Portal: tenant + app + Authentication + Expose an API |
-| 5:00–7:30 | **API Manager 40%** | Gateway routes + authorizer + curls 200/401 |
-| 7:30–8:30 | **Runtime AWS** | EC2 + EIP (+ S3 opcional) |
-| 8:30–10:00 | Cierre rúbrica | “MSAL autentica; Gateway y BFF validan el mismo JWT” |
-
-**Frase de cierre:**  
-> *“Entra emite el JWT; API Gateway actúa como API Manager en el borde; el BFF vuelve a validar y orquesta ocho microservicios. La compra publica en tres colas de un cluster RabbitMQ, con ACK manual y DLQ. FE y BE están en la nube.”*
-
----
-
-## 11. Calidad
+- [Kafka UI mediante el túnel privado](http://127.0.0.1:18093/dev/kafka/) muestra brokers, topics, grupos y métricas.
+- [RabbitMQ Management mediante el túnel privado](http://127.0.0.1:18072/) muestra nodos, colas, tasas y consumidores.
 
 ```bash
-# Frontend
-cd frontend && npm run build -- --configuration=production
-
-# Backend (desde cada módulo o con el wrapper del servicio)
-cd backend && ./mvnw test
-
-# Terraform
-cd terraform && terraform fmt -check -recursive && terraform validate
+BASE=https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev
+curl -fsS "$BASE/web/" >/dev/null
+curl -fsS "$BASE/api/public/health"
+curl -fsS "$BASE/api/public/offers"
+curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/api/me" # 401 sin token
 ```
 
----
+La integración se probó con 13 pruebas Maven, los dos flujos HTTP en local, mensajes inválidos hacia DLT, deduplicación y reconstrucción tras reinicios. En la demo se comprobaron el login Entra, CORS, una reseña, una compra simulada, la actualización del panel de ventas y los ACK de RabbitMQ para pago y despacho. Kafka UI mostró los dos brokers y sus métricas.
 
-## 12. Hitos
+La demo conserva parte del estado operativo en memoria. Reiniciar los servicios puede reiniciar carritos, pedidos o reseñas, según el servicio. Las ofertas se reconstruyen desde Kafka y la analítica conserva sus datos en disco. La publicación en RabbitMQ y Kafka se realiza por separado, por lo que un fallo de envío a un broker puede dejar incompleto ese flujo.
 
-- [x] Scaffold Angular + MSAL + BFF + 8 MS  
-- [x] Entra ID (login real, PKCE, claims, admin por lista)  
-- [x] Terraform API Gateway JWT + CORS  
-- [x] Despliegue AWS Academy (EC2 + nginx HTTPS + Gateway)  
-- [x] Demo EP1/EP2 en vivo (catálogo público + login + 401/200)  
-- [x] App Entra en tenant Duoc (login rápido sin admin approval)
-- [x] RabbitMQ en EC2: cluster de 2 nodos, tres colas con exchange direct, DLX y DLQ  
-- [x] ACK manual (éxito, un reintento, o DLQ) y API de administración en `rabbit-admin-service`  
-- [x] Nombres de la topología centralizados en `MessagingNames`  
-- [ ] CI/CD (GitHub Actions)  
-- [ ] Persistencia gestionada (RDS) si la demo deja de ser efímera  
+## Estructura del repositorio
 
----
-
-## 13. Equipo / licencia
-
-Proyecto académico — **DESARROLLO_CLOUD_NATIVE_I_005D**.  
-Repositorio: `GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D` · rama `main`.
+- [frontend/](frontend/) contiene la SPA Angular.
+- [backend/](backend/) contiene el BFF Spring Boot.
+- [services/](services/) contiene los microservicios y el contrato de mensajería.
+- [docker-compose.yml](docker-compose.yml) define RabbitMQ, ZooKeeper, Kafka y Kafka UI para desarrollo.
+- [rabbitmq/](rabbitmq/) contiene la configuración del clúster RabbitMQ.
+- [scripts/](scripts/) contiene el arranque, despliegue y pruebas de integración.
+- [terraform/](terraform/) contiene la infraestructura AWS.

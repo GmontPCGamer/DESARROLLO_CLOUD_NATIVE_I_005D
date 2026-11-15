@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "eventId",
+    "orderId",
+    "total",
+    "currency",
+    "createdAt",
+    "items"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "orderId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "total": {
+      "type": "number",
+      "minimum": 0,
+      "multipleOf": 0.01
+    },
+    "currency": {
+      "const": "CLP"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "productId",
+          "quantity",
+          "unitPrice"
+        ],
+        "properties": {
+          "productId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "unitPrice": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

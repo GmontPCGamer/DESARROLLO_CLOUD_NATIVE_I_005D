@@ -1,5 +1,5 @@
 # =============================================================================
-# EC2: BFF + 8 microservicios (demo 48h, H2 en memoria)
+# EC2: BFF + 12 microservicios y plataforma Kafka (actividad EP3)
 # AWS Academy: LabInstanceProfile + key vockey
 # =============================================================================
 
@@ -101,7 +101,9 @@ resource "aws_instance" "backend" {
     #!/bin/bash
     set -eux
     dnf update -y
-    dnf install -y java-17-amazon-corretto-headless awscli unzip
+    dnf install -y java-17-amazon-corretto-headless awscli unzip docker
+    systemctl enable --now docker
+    usermod -aG docker ec2-user
     mkdir -p /opt/nexotech/jars /opt/nexotech/logs /opt/nexotech/bin
     cat >/etc/profile.d/nexotech.sh <<'ENV'
     export SPRING_PROFILES_ACTIVE=azuread

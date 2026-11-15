@@ -60,10 +60,13 @@ public class ReviewController {
   }
 
   @PostMapping("/reviews/{productId}")
-  public Review create(
+  public synchronized Review create(
       @PathVariable Long productId,
       @RequestBody ReviewRequest request,
       @AuthenticationPrincipal Jwt jwt) {
+    if (productId == null || productId <= 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El producto debe ser positivo");
+    }
     if (request == null || request.rating() < 1 || request.rating() > 5) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La valoración debe estar entre 1 y 5 estrellas");
     }
@@ -89,7 +92,7 @@ public class ReviewController {
         request.comment().trim(),
         Instant.now());
     reviews.add(new StoredReview(userId, review));
-    events.published(userId, productId, request.rating());
+    events.published(userId, review.id(), productId, request.rating());
     return review;
   }
 
