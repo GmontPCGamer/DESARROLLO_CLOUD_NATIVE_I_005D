@@ -17,6 +17,16 @@
   @if (error()) { <p class="alert" role="alert">{{ error() }}</p> }
   @if (message()) { <p class="alert success" role="status">{{ message() }}</p> }
   <p class="muted">Los dashboards se abren por el acceso privado de administración; el panel de topics y ventas funciona con tu sesión Microsoft.</p>
+  <h3>Demostración de errores Kafka</h3>
+  <p class="muted">Envía un evento de compra de prueba con un identificador de pedido inválido. No crea un pedido ni realiza un cobro.</p>
+  <button type="button" class="btn btn-secondary" [disabled]="demoRunning()" (click)="forceOrderError()">
+    {{ demoRunning() ? 'Enviando evento…' : 'Forzar error de compra (demo)' }}
+  </button>
+  @if (demo(); as result) {
+    <p role="status">Kafka recibió el evento <code>{{ result.eventId }}</code>. Tras los reintentos,
+      busca esa clave en <strong>Messages</strong> del topic <code>{{ result.errorTopic }}</code> en Kafka UI.</p>
+  }
+  @if (demoError(); as message) { <p class="alert" role="alert">{{ message }}</p> }
   <h3>Administrar topics</h3>
   <div class="actions" style="align-items: end; flex-wrap: wrap; margin-bottom: 1rem">
     <label>Topic de prueba<input aria-label="Nombre del topic" [value]="topicName()" (input)="topicName.set($any($event.target).value)" /></label>
