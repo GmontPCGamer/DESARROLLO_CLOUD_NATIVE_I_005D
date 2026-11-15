@@ -49,7 +49,7 @@
     }</tbody></table>
   </div>
   <h3>Grupos de consumidores</h3>
-  <p class="muted">Analítica conserva su avance y evita duplicar ventas. Ofertas reconstruye sus señales desde el historial en cada inicio.</p>
+  <p class="muted">Analítica conserva su avance y evita duplicar ventas. Ofertas conserva su proyección y retoma el consumo desde el último offset confirmado.</p>
   <div class="actions" style="flex-wrap:wrap">
     @for(group of groups();track group.groupId) {
       <button class="btn btn-ghost" (click)="inspectGroup(group)">{{ group.groupId }} · {{ group.state }}</button>

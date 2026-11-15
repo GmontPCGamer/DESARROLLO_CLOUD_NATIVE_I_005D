@@ -85,7 +85,7 @@ if '--all-flows' in __import__('sys').argv:
     assert any(g['groupId']=='sales-analytics-v1' for g in call('/admin/kafka/groups')[1])
     print('PASS: compra -> Kafka -> analítica; notificación Rabbit; administración de topics y grupos con token')
 
-# Opción de prueba de reconstrucción: sólo actúa sobre el proceso local registrado.
+# Verifica la proyección persistida al reiniciar el proceso local registrado.
 if '--restart-offers' in __import__('sys').argv:
     from pathlib import Path
     import signal
@@ -116,7 +116,7 @@ if '--restart-offers' in __import__('sys').argv:
         except (urllib.error.URLError, TimeoutError):
             return False
     eventually(replayed)
-    print('PASS: ofertas reconstruidas desde Kafka tras reiniciar offer-service')
+    print('PASS: ofertas conservadas tras reiniciar offer-service con el grupo estable')
 
 if '--restart-analytics' in __import__('sys').argv:
     from pathlib import Path

@@ -7,15 +7,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.cloudnative.offer.messaging.ReviewOfferListener;
-import com.cloudnative.offer.messaging.ReviewOfferListener.OfferSignal;
+import com.cloudnative.offer.domain.OfferProjection;
 
 @RestController
 @RequestMapping("/api")
 public class OfferController {
-  private final ReviewOfferListener signals;
+  private final OfferProjection signals;
 
-  public OfferController(ReviewOfferListener signals) { this.signals = signals; }
+  public OfferController(OfferProjection signals) { this.signals = signals; }
 
   @GetMapping("/public/health")
   public Map<String, String> health() { return Map.of("status", "UP", "service", "offer-service", "queue", "Kafka"); }
@@ -23,9 +22,8 @@ public class OfferController {
   /** Retorna ofertas armadas con señales que el consumidor recibió desde Kafka. */
   @GetMapping("/public/offers")
   public List<Offer> offers() {
-    return signals.products().values().stream()
+    return signals.products().stream()
         .filter(signal -> signal.positiveReviews() > 0)
-        .sorted((a, b) -> Integer.compare(b.positiveReviews(), a.positiveReviews()))
         .map(signal -> new Offer(signal.productId(), "Destacado por la comunidad",
             signal.positiveReviews() + " reseña(s) positiva(s)", signal.reviewCount()))
         .toList();
