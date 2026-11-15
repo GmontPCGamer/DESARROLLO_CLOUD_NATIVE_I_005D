@@ -24,6 +24,7 @@ export KAFKA_UI_USERNAME="${SPRING_RABBITMQ_USERNAME:?}"
 export KAFKA_UI_PASSWORD="${SPRING_RABBITMQ_PASSWORD:?}"
 COMPOSE=(docker compose -p nexotech-ep3 -f "$RELEASE/docker-compose.yml")
 "${COMPOSE[@]}" pull zookeeper kafka1 kafka2 kafka-ui >/dev/null 2>&1
+bash "$RELEASE/configure-offers-postgres.sh"
 SERVICES=(catalog cart order notification inventory payment shipping review offer sales-analytics kafka-admin rabbit-admin backend)
 # Se detiene sólo esta aplicación y después de descargar todas las imágenes.
 for svc in "${SERVICES[@]}"; do

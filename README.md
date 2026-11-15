@@ -68,7 +68,7 @@ El clúster usa ZooKeeper y dos brokers. Cada topic de negocio tiene tres partic
 
 Los [contratos JSON](services/messaging-contract/src/main/resources/schemas/) incluyen los eventos de entrada y las respuestas de ofertas y analítica. El módulo [messaging-contract](services/messaging-contract/) también contiene los nombres de la topología de RabbitMQ y los tipos de evento de Kafka.
 
-Ofertas reconstruye su proyección desde el historial retenido al arrancar. Analítica usa el grupo estable `sales-analytics-v1` y guarda la proyección y los identificadores procesados en H2 en disco para mantener los totales y evitar duplicados tras reinicios. El panel **Administración → Eventos y ventas** muestra la analítica, las particiones y réplicas, la configuración de topics y los grupos de consumidores. Permite probar creación, cambios de retención o particiones y eliminación con topics `demo.*`.
+Ofertas persiste la proyección y los identificadores de eventos con el grupo estable `offer-service-v2`. La primera migración lee el historial desde el inicio. Las réplicas de ofertas deben compartir la misma base PostgreSQL mediante `OFFER_DB_URL`, `OFFER_DB_USER` y `OFFER_DB_PASSWORD`. En AWS, ofertas usa PostgreSQL 17 en un contenedor separado en la EC2 de aplicación. La base tiene un volumen persistente y escucha únicamente en el puerto local `15432`. El instalador genera las credenciales en la instancia y las carga desde un archivo privado de systemd. En local, el valor predeterminado es H2 en disco. Analítica usa el grupo estable `sales-analytics-v1` y guarda la proyección y los identificadores procesados en H2 en disco para mantener los totales y evitar duplicados tras reinicios. El panel **Administración → Eventos y ventas** muestra la analítica, las particiones y réplicas, la configuración de topics y los grupos de consumidores. Permite probar creación, cambios de retención o particiones y eliminación con topics `demo.*`.
 
 ## Ejecución local
 
@@ -120,7 +120,7 @@ Para actualizar una instalación existente, genera los JAR con Maven y compila e
 INSTANCE_ID='id-de-la-ec2' ARTIFACT_BUCKET='nombre-del-bucket-privado' bash scripts/deploy-ssm.sh
 ```
 
-El script envía el paquete al bucket privado y entrega un ID de comando de Systems Manager para consultar el resultado. La instalación conserva las releases anteriores y la configuración de la instancia. Para actualizar solo la interfaz, usa `bash scripts/deploy-frontend.sh`. Si cambia la infraestructura pública, `scripts/configure-public-cloud.py` actualiza rutas, CORS y el retorno de Entra con AWS CLI y Azure CLI.
+El script envía el paquete al bucket privado y entrega un ID de comando de Systems Manager para consultar el resultado. La instalación conserva las releases anteriores y la configuración de la instancia. `scripts/configure-offers-postgres.sh` prepara PostgreSQL antes de iniciar ofertas. Para actualizar solo la interfaz, usa `bash scripts/deploy-frontend.sh`. Si cambia la infraestructura pública, `scripts/configure-public-cloud.py` actualiza rutas, CORS y el retorno de Entra con AWS CLI y Azure CLI.
 
 ### Estabilidad del enlace público
 
@@ -140,9 +140,9 @@ curl -fsS "$BASE/api/public/offers"
 curl -sS -o /dev/null -w '%{http_code}\n' "$BASE/api/me" # 401 sin token
 ```
 
-La integración se probó con 13 pruebas Maven, los dos flujos HTTP en local, mensajes inválidos hacia DLT, deduplicación y reconstrucción tras reinicios. En la demo se comprobaron el login Entra, CORS, una reseña, una compra simulada, la actualización del panel de ventas y los ACK de RabbitMQ para pago y despacho. Kafka UI mostró los dos brokers y sus métricas.
+Las pruebas cubren publicación y consumo, mensajes inválidos hacia DLT, reparto de particiones entre dos consumidores, deduplicación, persistencia y reenvío tras fallos del broker. En la demo se comprobaron el login Entra, CORS, una reseña, una compra simulada, la actualización del panel de ventas y los ACK de RabbitMQ para pago y despacho. Kafka UI mostró los dos brokers y sus métricas.
 
-La demo conserva parte del estado operativo en memoria. Reiniciar los servicios puede reiniciar carritos, pedidos o reseñas, según el servicio. Las ofertas se reconstruyen desde Kafka y la analítica conserva sus datos en disco. La publicación en RabbitMQ y Kafka se realiza por separado, por lo que un fallo de envío a un broker puede dejar incompleto ese flujo.
+La demo conserva parte del estado operativo en memoria. Reiniciar los servicios puede reiniciar carritos, pedidos o reseñas, según el servicio. Ofertas y analítica conservan sus proyecciones en disco. Pedidos y reseñas guardan los eventos pendientes en disco y reintentan su envío a Kafka hasta recibir confirmación. El registro de la operación de negocio y su encolado siguen siendo escrituras separadas. Los consumidores deduplican por ID para tolerar reenvíos. RabbitMQ mantiene su propio flujo de publicación.
 
 ## Estructura del repositorio
 
@@ -153,3 +153,16 @@ La demo conserva parte del estado operativo en memoria. Reiniciar los servicios 
 - [rabbitmq/](rabbitmq/) contiene la configuración del clúster RabbitMQ.
 - [scripts/](scripts/) contiene el arranque, despliegue y pruebas de integración.
 - [terraform/](terraform/) contiene la infraestructura AWS.
+
+### Operaciones sobre grupos Kafka
+
+```bash
+bash scripts/kafka-consumer-groups.sh list
+bash scripts/kafka-consumer-groups.sh inspect offer-service-v2
+bash scripts/kafka-consumer-groups.sh preview-reset demo.consumidor demo.eventos
+bash scripts/kafka-consumer-groups.sh reset demo.consumidor demo.eventos --confirm
+```
+
+Para ensayar el reinicio, crea antes el topic de prueba y consume al menos un mensaje con ese grupo. Detén el consumidor antes de aplicar el cambio. `inspect` muestra offsets y lag. En EC2, `KAFKA_COMPOSE_FILE` puede indicar la ruta al Compose de la instalación.
+
+En un entorno local de prueba, usa `KAFKA_UI_READONLY=false docker compose up -d kafka-ui` para demostrar la administración desde Kafka UI.

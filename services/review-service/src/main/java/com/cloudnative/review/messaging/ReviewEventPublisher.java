@@ -5,7 +5,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 
@@ -15,13 +14,13 @@ public class ReviewEventPublisher {
   private static final Logger log = LoggerFactory.getLogger(ReviewEventPublisher.class);
 
   private final RabbitTemplate rabbitTemplate;
-  private final KafkaTemplate<String, String> kafkaTemplate;
+  private final KafkaDeliveryQueue kafka;
   private final JsonMapper objectMapper;
 
-  public ReviewEventPublisher(RabbitTemplate rabbitTemplate, KafkaTemplate<String, String> kafkaTemplate,
+  public ReviewEventPublisher(RabbitTemplate rabbitTemplate, KafkaDeliveryQueue kafka,
       JsonMapper objectMapper) {
     this.rabbitTemplate = rabbitTemplate;
-    this.kafkaTemplate = kafkaTemplate;
+    this.kafka = kafka;
     this.objectMapper = objectMapper;
   }
 
@@ -41,17 +40,9 @@ public class ReviewEventPublisher {
     try {
       String event = objectMapper.writeValueAsString(new ReviewCreated(UUID.randomUUID().toString(), reviewId, productId, rating,
           java.time.Instant.now()));
-      kafkaTemplate.send(ReviewCreated.TOPIC, productId.toString(), event)
-          .whenComplete((result, failure) -> {
-            if (failure != null) {
-              log.error("Kafka no confirmó la reseña reviewId={} productId={}", reviewId, productId, failure);
-            } else {
-              log.info("Kafka confirmó reviewId={} partition={} offset={}", reviewId,
-                  result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
-            }
-          });
+      kafka.enqueue(productId.toString(), event);
     } catch (Exception ex) {
-      log.warn("La reseña se guardó, pero no se publicó el evento Kafka: {}", ex.getMessage());
+      log.warn("La reseña se guardó, pero no se pudo guardar el evento Kafka pendiente: {}", ex.getMessage());
     }
   }
 

@@ -3,11 +3,19 @@ spring:
     name: offer-service
   profiles:
     default: local
+  datasource:
+    url: ${OFFER_DB_URL:jdbc:h2:file:${APP_DATA_DIR:./.run/data}/offers}
+    username: ${OFFER_DB_USER:sa}
+    password: ${OFFER_DB_PASSWORD:}
+  sql:
+    init:
+      mode: always
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092,localhost:19094}
     consumer:
-      # La proyección se reconstruye desde el inicio al arrancar cada instancia.
-      group-id: offer-service-${random.uuid}
+      group-id: offer-service-v2
+      properties:
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer

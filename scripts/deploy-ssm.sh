@@ -15,6 +15,7 @@ for svc in catalog cart order notification inventory payment shipping review off
 done
 cp "$ROOT/scripts/install-release-ec2.sh" "$STAGE/install-release-ec2.sh"
 cp "$ROOT/scripts/configure-public-access.sh" "$STAGE/configure-public-access.sh"
+cp "$ROOT/scripts/configure-offers-postgres.sh" "$STAGE/configure-offers-postgres.sh"
 cp "$ROOT/docker-compose.yml" "$STAGE/docker-compose.yml"
 mkdir -p "$STAGE/rabbitmq"
 cp "$ROOT/rabbitmq/local-cluster.conf" "$STAGE/rabbitmq/local-cluster.conf"
