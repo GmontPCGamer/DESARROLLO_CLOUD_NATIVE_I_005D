@@ -2,10 +2,26 @@
 
 Tienda de tecnología desarrollada para **Desarrollo Cloud Native I (005D)**. Incluye catálogo público, inventario, carrito, compras con pago simulado, cotización de despacho, reseñas, notificaciones y administración. RabbitMQ mueve las tareas operativas de la tienda y Kafka procesa eventos para ofertas y análisis de ventas.
 
-- [Abrir la demo en AWS](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/)
-- [API pública de salud](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/health)
-- [Ofertas generadas a partir de reseñas](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/offers)
-- [Cambios de la integración EP3](https://github.com/GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D/pull/1)
+## Acceso rápido para la presentación
+
+| Abre | Enlace | Acceso |
+| --- | --- | --- |
+| Tienda NexoTech en AWS | [Abrir frontend](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/) | Público |
+| Panel de eventos y ventas | [Abrir Administración](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/web/admin) | Cuenta Duoc con rol administrador |
+| Kafka UI en AWS | [Abrir Kafka UI](http://127.0.0.1:18093/dev/kafka/) | Túnel de AWS y credenciales de la demo |
+| RabbitMQ Management en AWS | [Abrir RabbitMQ](http://127.0.0.1:18072/) | Túnel de AWS y credenciales de la demo |
+
+Antes de presentar, ejecuta este comando desde la raíz del repositorio **en el mismo equipo donde vas a abrir los dashboards**:
+
+```bash
+bash scripts/start-monitoring-tunnels.sh
+```
+
+Usa AWS CLI con una sesión de AWS Academy vigente y el complemento Session Manager. Espera a que aparezcan los puertos `18093` y `18072` y deja la terminal abierta. Los enlaces `127.0.0.1` conectan ese navegador a los dashboards que corren en EC2. Para compartir la demo con el público, usa el enlace HTTPS del frontend.
+
+- [Comprobar salud de la API](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/health)
+- [Ver ofertas generadas a partir de reseñas](https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev/api/public/offers)
+- [Ver cambios de la integración EP3](https://github.com/GmontPCGamer/DESARROLLO_CLOUD_NATIVE_I_005D/pull/1)
 
 ## Arquitectura
 
@@ -114,14 +130,7 @@ API Gateway llega a nginx y al BFF mediante la **Elastic IP** de la EC2. Esa IP 
 
 ### Monitoreo y comprobaciones
 
-Abre los dashboards de AWS mediante Systems Manager con una sesión AWS autorizada. Deja el comando ejecutándose mientras los usas:
-
-```bash
-bash scripts/start-monitoring-tunnels.sh
-```
-
-- [Kafka UI mediante el túnel privado](http://127.0.0.1:18093/dev/kafka/) muestra brokers, topics, grupos y métricas.
-- [RabbitMQ Management mediante el túnel privado](http://127.0.0.1:18072/) muestra nodos, colas, tasas y consumidores.
+Consulta [Acceso rápido para la presentación](#acceso-rápido-para-la-presentación) para abrir Kafka UI y RabbitMQ Management en AWS.
 
 ```bash
 BASE=https://ourd5f7qr1.execute-api.us-east-1.amazonaws.com/dev
